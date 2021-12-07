@@ -26,7 +26,7 @@ double precision::max_omega, step, g_coupling
 double precision::pi, pi2, S_XX_value, S_homodyne, A_homodyne, S_heterodyne
 double precision::omega_sweep  ! loop variable "swept" over the num_points for data collection
 double precision::nbar  ! thermal bath phonon occupancy
-double precision::num_phonons, num_photons, phonons_from_optical_noise, AVRE, area_under_S_XX, oscillator_temperature
+double precision::num_phonons, num_photons, phonons_from_optical_noise, area_under_S_XX, oscillator_temperature
 
 ! for OPTOCOOL formula
 double precision::TBATH, C_plus, C_minus, x_cooling, x_phonons_from_cooling_formula
@@ -34,7 +34,14 @@ double precision::TBATH, C_plus, C_minus, x_cooling, x_phonons_from_cooling_form
 ! read parameter file with input values
 double precision, DIMENSION(num_points)::S_XX_array, omega_array, S_homodyne_array
 
+! which expressions to calculate spectra with
+! either 1 = original, 2 = via back actions, 3 = manually derived
+integer::method
+method = 3
+WRITE(6, *) 'Chosen method', method
+
 ! plot optical field amplitudes here
+! TODO: understand how to fill these with data
 OPEN(8, file="FTanX.dat", status="unknown")
 OPEN(10, file="FTanOPT.dat", status="unknown")
 
@@ -102,6 +109,7 @@ DO 11 ii = 1, num_points
 
       ! work out same PSDs for positive and symmetrise homodyne
       CALL CALCULATE_SPECTRA(&
+            method, &
             g_coupling, nbar, num_photons, &
             theta_homodyne_pi, Delta, half_kappa, half_Gamma_M, &
             omega_x, omega_sweep, S_XX_value, &
@@ -122,12 +130,12 @@ DO 11 ii = 1, num_points
 11 END DO
 
 ! back action limit - at zero pressure, this is the residual phonon number from optical noise
+! this should be the theoretical limit if Gamma_M is set to zero
 phonons_from_optical_noise = ((omega_x + Delta)**2 + half_kappa**2)/(-4 * omega_x * Delta)
 WRITE(6, *) 'x-axis back action limited phonons ='
 WRITE(6, 200) phonons_from_optical_noise
 
-area_under_S_XX = phonons_from_optical_noise
-! integrate the PSD for the (rescaled) position operator X = 1/sqrt(2) * (b + b^dagg)
+! integrate the PSD for the (rescaled) position operator X^hat = (b + b^dagg)
 ! uses trapezoidal rule
 CALL INTEGRATE_SXX(num_points, omega_array, S_XX_array, area_under_S_XX)
 WRITE(6, *) 'Area under S_XX ='
@@ -136,8 +144,9 @@ WRITE(6, 200) area_under_S_XX
 ! Area phonons_from_optical_noise corresponds to 2n+1 so convert to get n               
 num_phonons = 0.5d0 * (area_under_S_XX - 1.d0)
 
-! TODO: why is this calculated as (effectively) 2n+1 * hbar * omega_x in the original code?
-oscillator_temperature = area_under_S_XX * hbar * omega_x/BOLTZ
+! oscillator_temperature = area_under_S_XX * hbar * omega_x/BOLTZ
+! original code does the above i.e. goes straight from the area XRE (2n+1) to get TEMP
+! do more precisely with num_phonons (n) here
 oscillator_temperature = num_phonons * hbar * omega_x/BOLTZ
 
 WRITE(6, *) 'x-axis phonons from optomechancial cooling formula:'
@@ -149,14 +158,13 @@ WRITE(6, 200) oscillator_temperature
 
 ! 200 FORMAT(7E14.3)
 200 FORMAT(ES14.2)
-300 FORMAT(ES14.3)
-400 FORMAT(ES14.4)
 500 FORMAT(ES14.5)
 STOP
 END
 
 ! Formerly 'ANALYT'
 SUBROUTINE CALCULATE_SPECTRA(&
+      method, &
       g_coupling, nbar, num_photons, &
       theta_homodyne_pi, Delta, half_kappa, half_Gamma_M, &
       omega_x, omega, S_XX_value, &
@@ -165,10 +173,10 @@ SUBROUTINE CALCULATE_SPECTRA(&
       ! Generic routine for calculating the noise spectra of the trap and probe beams
       ! """
       IMPLICIT NONE
-      integer::N_total
+      integer::N_total, method
       PARAMETER(N_total=4)
       double precision::g_coupling, nbar, num_photons, theta_homodyne_pi, Gav
-      double precision::pi, S_XX_value, S_homodyne, S_heterodyne
+      double precision::S_XX_value, S_homodyne, S_heterodyne
       double precision::Delta, omega, omega_x, half_kappa, half_Gamma_M, omega_heterodyne, omega_addition
       double complex::chi_C, chi_C_star, chi_M, chi_M_star
       double complex::BAX(1, N_total), A1(1, N_total), A1dagg(1, N_total)
@@ -182,32 +190,36 @@ SUBROUTINE CALCULATE_SPECTRA(&
             Delta, half_kappa, half_Gamma_M, &
             chi_C, chi_C_star, chi_M, chi_M_star)
 
-      ! ! work out noise vector for X^hat, a and a^dagg
-      ! CALL CALCULATE_NOISE_VECTORS(&
-      !       g_coupling, half_Gamma_M, half_kappa, &
-      !       chi_C, chi_C_star, chi_M, chi_M_star, &
-      !       BAX, A1, A1dagg)
+      IF (method == 1) THEN
+            ! work out noise vector for X^hat, a and a^dagg
+            CALL CALCULATE_NOISE_VECTORS(&
+                  g_coupling, half_Gamma_M, half_kappa, &
+                  chi_C, chi_C_star, chi_M, chi_M_star, &
+                  BAX, A1, A1dagg)
 
-      ! ! X =  sqrt(0.5) * (b+b^dagg), so halve XX
-      ! ! TODO: this isn't halved?
-      ! S_XX_value = (abs(BAX(1, 1)))**2 + (nbar + 1) * (abs(BAX(1, 3)))**2 + nbar * (abs(BAX(1, 4)))**2
+            ! Note: this isn't halved, implying X^hat = (b + b^dagg) i.e. with no sqrt(0.5) factor
+            S_XX_value = (abs(BAX(1, 1)))**2 + (nbar + 1) * (abs(BAX(1, 3)))**2 + nbar * (abs(BAX(1, 4)))**2
 
-     
-      ! ! My alternative using the back-action expressions
-      ! ! NOTE: Putting these expressions in Mathematica match exactly with my manually derived ones
-      ! CALL CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
-      !       g_coupling, half_Gamma_M, half_kappa, &
-      !       chi_C, chi_C_star, chi_M, chi_M_star, &
-      !       X_hat_vector, a_vector, a_dagg_vector)
+      ELSE IF (method == 2) THEN
+            ! My alternative using the back-action expressions
+            ! NOTE: Putting these expressions in Mathematica match exactly with my manually derived ones
+            CALL CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
+                  g_coupling, half_Gamma_M, half_kappa, &
+                  chi_C, chi_C_star, chi_M, chi_M_star, &
+                  X_hat_vector, a_vector, a_dagg_vector)
+                  
+            S_XX_value = (abs(X_hat_vector(1)))**2 + (nbar + 1) * (abs(X_hat_vector(3)))**2 + nbar * (abs(X_hat_vector(4)))**2
 
-      ! My alternative using manually derived expressions
-      CALL CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
-            g_coupling, half_Gamma_M, half_kappa, &
-            chi_C, chi_C_star, chi_M, chi_M_star, &
-            X_hat_vector, a_vector, a_dagg_vector)
+      ELSE IF (method == 3) THEN
+            ! My alternative using manually derived expressions
+            CALL CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
+                  g_coupling, half_Gamma_M, half_kappa, &
+                  chi_C, chi_C_star, chi_M, chi_M_star, &
+                  X_hat_vector, a_vector, a_dagg_vector)
 
+            S_XX_value = (abs(X_hat_vector(1)))**2 + (nbar + 1) * (abs(X_hat_vector(3)))**2 + nbar * (abs(X_hat_vector(4)))**2
 
-      S_XX_value = (abs(X_hat_vector(1)))**2 + (nbar + 1) * (abs(X_hat_vector(3)))**2 + nbar * (abs(X_hat_vector(4)))**2
+      END IF
 
       ! COMPARE ALTERNATIVES - this verified that N0X was equal to X_hat_vector
       ! IF (ALL(N0X /= X_hat_vector)) THEN
@@ -443,7 +455,7 @@ SUBROUTINE CALCULATE_NOISE_VECTORS(&
       double complex::chi_M, chi_M_star, chi_MBA
       double complex::one, imag_n
 
-      double complex::CMX, eta_C, eta_M, CA1, CA1dagg, Betx
+      double complex::CMX, eta_C, eta_M, CA1, CA1dagg, BETX
 
       double complex, INTENT(OUT)::BAX(1, N_total)
       double complex, INTENT(OUT)::A1(1, N_total)
@@ -459,20 +471,19 @@ SUBROUTINE CALCULATE_NOISE_VECTORS(&
       eta_M = chi_M - chi_M_star
 
       ! Normalisations
-      CMX = 1.d0 + g_coupling**2 * eta_M * eta_C
+      CMX = 1.d0 + g_coupling**2 * eta_C * eta_M
       Sqrtkapp = sqrt(2.d0 * half_kappa)
       sqrt_Gamma_M = sqrt(2.d0 * half_Gamma_M)
-      BETx = imag_n * Sqrtkapp * eta_M * g_coupling
-      
+      BETX = imag_n * g_coupling * eta_M * Sqrtkapp
       
       ! X^hat noise vector; weights of a_in, a_in^dagg, b_in, b_in^dagg
-      ! k_M3 i.e. for a_in
+      ! f_3 i.e. for a_in
       N0X(1) = BETX * chi_C/CMX
-      ! k_M4 i.e. for a_in^dagg
+      ! f_4 i.e. for a_in^dagg
       N0X(2) = BETX * chi_C_star/CMX
-      ! k_M1 i.e. for b_in
+      ! f_1 i.e. for b_in
       N0X(3) = sqrt_Gamma_M * chi_M/CMX
-      ! k_M2 i.e. for b_in^dagg
+      ! f_2 i.e. for b_in^dagg
       N0X(4) = sqrt_Gamma_M * chi_M_star/CMX  
       
       ! FOR 1D
@@ -608,10 +619,10 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
       ! (alternative but equivalent expressions I derived manually)
       ! """
       IMPLICIT NONE
-      integer::ii, N_total
+      integer::N_total
       double precision::g_coupling, half_Gamma_M, half_kappa, sqrt_kappa, sqrt_Gamma_M
       PARAMETER(N_total=4)
-      double complex::one, imag_n, ig, nu
+      double complex::one, imag_n, ig
       double complex::chi_C, chi_C_star, chi_CBA
       double complex::chi_M, chi_M_star, chi_MBA
       double complex::A_M, A_M_star
@@ -637,7 +648,7 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
       ig = imag_n * g_coupling
 
       ! optical back-action
-      ! susceptibility of optical field to back-action mechanical pressure fluctuations
+      ! susceptibility of optical field to back-action thermal pressure fluctuations
       chi_CBA = ig * (chi_C - chi_C_star)
 
       ! mechanical back-action
@@ -724,17 +735,10 @@ SUBROUTINE INTEGRATE_SXX(num_points, omega_array, S_XX_array, area_under_S_XX)
 
       ! each trapeze base is the step size in the omega_array i.e. max_omega/num_points 
       trapeze_base = abs(omega_array(2) - omega_array(1))
-
-      ! TODO: why do we feed in area_under_S_XX as:
-      ! phonons_from_optical_noise = ((omega_x + Delta)**2 + half_kappa**2)/(-4 * omega_x * Delta)   
-      ! only to set it to 0 here to start the loop?
-      ! commenting out the below changes the final answer...
-      area_under_S_XX = 0.d0
-
       DO ii = 1, num_points - 1
             area_under_S_XX = area_under_S_XX + 0.5d0 * (S_XX_array(ii) + S_XX_array(ii + 1))
       END DO
-      
+
       ! this is equal to 2n+1
       area_under_S_XX = area_under_S_XX * trapeze_base/pi2
       RETURN
