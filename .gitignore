@@ -1,0 +1,7 @@
+.DS_Store
+
+# Fortran executables/binaries
+.out
+
+# Fortran data files
+.dat
