@@ -257,7 +257,7 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
 
     call Heterodyne(NT,AVNX,AVPHOT,THETA,A1,A1dagg,SHET1)
 !     write(6,*)omhet,SHET1,(SHET1)/ABS(CHIR1)**2/GMAT(1)**2
-     SHET1=(SHET1-1.d0)/ABS(CHISTMOM1)**2/Gav**2/kapp2/2.
+     SHET1=(SHET1-1.d0)/ABS(CHISTMOM1)**2/GX**2/kapp2/2.
  !     SHET1=SHET1-1.d0
 100   format(6D16.8)
       RETURN

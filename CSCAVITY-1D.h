@@ -18,20 +18,20 @@ PARAMETER(&
 
     c=3.d8, & ! speed of light /ms^-1
     hbar=1.05d-34, & ! Planck's constant /Js^-1
-    BOLTZ=1.4d-23, & ! Boltzmann's constant /JK^-1
+    kB=1.4d-23, & ! Boltzmann's constant /JK^-1
     TEMP=300.d0, & ! temperature /K
     Gravity=9.8d0, & ! acceleration due to Earth's gravity /ms^-2
 
     WK=5.9d6, & ! 2*pi/lambda=k
-    waist_radius=61.d-6, & ! /metres presumably?
     WX=1.02d-6, &
-    Wy=0.879d-6, &
-    XL=1.223d-2, & ! cavity length /metres
+    WY=0.879d-6, &
+    waist_radius=61.d-6, & ! /metres presumably?
+    cavity_length=1.223d-2, & ! /metres
     Finesse=2.8d4, &
 
     air_pressure=1.e-6, & ! air pressure /millibars
-    tweezer_input_power1=0.3886d0, & ! input power of tweezer beam /Watts
-    detuning1=-200.d3, & ! detuning of trap beam /KHz
+    tweezer_input_power=0.3886d0, & ! /Watts
+    detuning=-200.d3, & ! detuning of trap beam i.e. Delta? /KHz
     DelFSR=14.d9, & ! DelFSR = 1 FSR (Free Spectral Range) = 14 GHz
     theta0=0.5d0, & ! angle between tweezer polarization and cavity axis. Given as as a FRACTION of pi so pi/4  is theta0=0.25
 

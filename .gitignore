@@ -2,6 +2,3 @@
 
 # Fortran executables/binaries
 .out
-
-# Fortran data files
-.dat

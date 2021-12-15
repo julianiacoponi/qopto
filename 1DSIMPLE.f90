@@ -8,406 +8,447 @@
 
 IMPLICIT NONE
 integer::ii
-integer::N_total, NPERIOD, num_points
-double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
-double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
-double precision::tweezer_input_power1, detuning1, X0, Y0, Z0, Theta0, theta_homodyne
+double precision::pi, pi2
 
-! parameter file with input values
+! Mostly unused parameters imported from CSCAVITY-1D.h
+integer::NPERIOD, N_total
+double precision::R0, rho, EPSR, Epsi0
+double precision::c, hbar, kB, TEMP, Gravity
+double precision::WK, WX, WY, waist_radius, cavity_length, Finesse
+double precision::air_pressure, tweezer_input_power, detuning, DelFSR, theta0
+double precision::X0, Y0, Z0
 INCLUDE 'CSCAVITY-1D.h'
+
+double precision::theta_homodyne
+integer::num_points
 PARAMETER(theta_homodyne=0.d0, num_points=10000)
-double precision::omega_x
 
-! calculated  parameters
-! half_Gamma_M = mechanical damping due to gas,  also noise from fluctuation dissipation
-double precision::Delta, half_kappa, kappa, theta_homodyne_pi, half_Gamma_M
-double precision::max_omega, step, g_coupling
 
-double precision::pi, pi2, S_XX_value, S_homodyne, A_homodyne, S_heterodyne
-double precision::omega_sweep  ! loop variable "swept" over the num_points for data collection
-double precision::nbar  ! thermal bath phonon occupancy
-double precision::num_phonons, num_photons, phonons_from_optical_noise, area_under_S_XX, oscillator_temperature
+! Gamma_M = mechanical damping due to gas,  also noise from fluctuation dissipation
+double precision::Delta, kappa, omega_M, half_Gamma_M, g_coupling
+double precision::half_kappa, theta_homodyne_pi
 
-! for OPTOCOOL formula
+! thermal bath phonon occupancy
+double precision::nbar, num_photons
+double precision::num_phonons, phonons_from_optical_noise, oscillator_temperature
+
+double precision::omega_value, max_omega, omega_range, omega_increment
+double precision::S_XX_value, S_heterodyne_value, S_homodyne_value, S_homodyne_negative 
+double precision::area_under_S_XX, area_under_S_heterodyne, area_under_S_homodyne
+double precision, DIMENSION(num_points)::S_XX_array, S_heterodyne_array, S_homodyne_array
+
+! for optomechanical cooling formula
 double precision::TBATH, C_plus, C_minus, x_cooling, x_phonons_from_cooling_formula
 
-! read parameter file with input values
-double precision, DIMENSION(num_points)::S_XX_array, omega_array, S_homodyne_array
-
 ! which expressions to calculate spectra with
-! either 1 = original, 2 = via back actions, 3 = manually derived
-integer::method
-method = 3
-WRITE(6, *) 'Chosen method', method
+integer::expressions_choice
+! which input parameters to use
+integer::parameters_choice
 
-! plot optical field amplitudes here
-! TODO: understand how to fill these with data
-OPEN(8, file="FTanX.dat", status="unknown")
-OPEN(10, file="FTanOPT.dat", status="unknown")
+WRITE(*, *)  "Choose input parameters: "
+WRITE(*, *) '1 = original parameters'
+WRITE(*, *) '2 = artificial parameters'
+READ(*, *)  parameters_choice
+
+WRITE(*, *) 'Choose expressions to calculate noise vectors with:'
+WRITE(*, *) '1 = original expressions (in original scripts)'
+WRITE(*, *) '2 = slightly reworked expressions (using back-action susceptibilities)'
+WRITE(*, *) '3 = my own manually-derived expressions'
+READ(*, *)  expressions_choice
+
+! FORMAT can be understood from:
+! https://pages.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
+! http://www.personal.psu.edu/jhm/f90/lectures/23.html
+
+! PRINT, OPEN, WRITE, CLOSE can be understood from:
+! https://www.tutorialspoint.com/fortran/fortran_file_input_output.htm
+! https://meteor.geol.iastate.edu/classes/mt227/lectures/Formatting.pdf
+
+
+! e.g. the below is:
+! '4' = 4 things written to the same line 
+! 'ES' = scientific exponential notation (1-9E+power, instead of 0.1-0.9)
+! '23' = number of positions to be used
+! '15' = number of digits to the right of the decimal point
+! NOTE: this is *not* the same as the precision of the number
+101 FORMAT(4ES23.15)
+305 FORMAT(5ES11.3)
+
 
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
-
-! homodyne angle
 theta_homodyne_pi = theta_homodyne * pi
-
 TBATH = 300.d0
 
-! parameters needed for final S_XX calculation
-Delta = -200000.0 * pi2 
-kappa = 438032.94007709384 * pi2
-omega_x = 128062.66787 * pi2
-half_Gamma_M = 0.324068D-02
-g_coupling = 53061.566105502839 * pi2
-WRITE(6, *) 'Delta, kappa, omega_x, Gamma_M, g_coupling, kB*T/hbar'
-WRITE(6, 500) Delta, kappa, omega_x, half_Gamma_M * 2, g_coupling, (BOLTZ * TBATH)/hbar
+
+! input parameters
+IF (parameters_choice == 1) THEN
+      ! formerly "FTanX.dat" - saves: omega, S_XX, S_heterodyne, S_homodyne
+      OPEN(8, file="spectra.dat", status="unknown")
+      Delta = -200000.0 * pi2 
+      kappa = 438032.94007709384 * pi2
+      omega_M = 128062.66787 * pi2
+      half_Gamma_M = 0.324068D-02
+      g_coupling = 53061.566105502839 * pi2
+      WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * TBATH)/hbar'
+      WRITE(*, 500) Delta, kappa, omega_M, half_Gamma_M * 2, g_coupling, (kB * TBATH)/hbar
+
+      ! thermal bath occupancy
+      nbar = (kB * TBATH)/(hbar * omega_M)
+      WRITE(*, *) 'nbar = (kB*TBATH)/(hbar*omega_M) = thermal bath phonon occupancy:'
+      WRITE(*, 500) nbar
+
+! dummy parameters from Mathematica
+ELSE IF (parameters_choice == 2) THEN
+      OPEN(8, file="spectra-artificial.dat", status="unknown")
+      Delta = -3.d0
+      kappa = 4.5d0
+      omega_M = 6.d0
+      half_Gamma_M = 2.5d0 / 2.
+      g_coupling = 0.25d0
+      nbar = 10.d0/omega_M
+      WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * TBATH)/hbar'
+      WRITE(*, 305) Delta, kappa, omega_M, half_Gamma_M * 2, g_coupling, nbar * omega_M
+
+END IF
+! give the .dat files column titles
+WRITE(8, *) "omega ", "S_XX ", "S_heterodyne ", "S_homodyne"
 
 half_kappa = kappa * 0.5d0
-
-! thermal bath occupancy
-nbar = (BOLTZ * TBATH)/(hbar * omega_x)
-
-WRITE(6, *) 'nbar (thermal bath phonon occupancy) ='
-WRITE(6, 200) nbar
 
 ! shot noise
 num_photons = 0.d0
 
 ! estimate x-axis phonons using optomechanical cooling formula for comparison
-C_plus = ((Delta + omega_x)**2 + half_kappa**2)**(-1)
-C_minus = ((Delta - omega_x)**2 + half_kappa**2)**(-1)
+C_plus = ((Delta + omega_M)**2 + half_kappa**2)**(-1)
+C_minus = ((Delta - omega_M)**2 + half_kappa**2)**(-1)
 x_cooling = -(g_coupling**2 * kappa) * (C_plus - C_minus)
 x_phonons_from_cooling_formula = nbar * 2 * half_Gamma_M/(abs(x_cooling) + 2. * half_Gamma_M)
 
 ! open loop over frequency sweep for noise spectra
 ! e.g. S_XX(omega) = FT(autocorrelation <X(t)X^T(t+tau)>)
-max_omega = 2 * omega_x * 1.001
-step = max_omega/num_points
+
+! expecting peaks at omega_M, so sample twice that range
+max_omega = 2.d0 * omega_M * 1.001
+! sampling both negative and positive omega
+omega_range = 2.d0 * max_omega
+omega_increment = omega_range/num_points
 
 DO 11 ii = 1, num_points
 
-      omega_sweep = -max_omega + 2 * (ii - 1) * step
+      omega_value = -max_omega + (ii - 1) * omega_increment
 
-      ! store frequency for integration
-      omega_array(ii) = omega_sweep
-
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! ! work out Power Spectral Density (PSD) of homodyne
-      ! A_homodyne = 0.d0
-      
-      ! ! work out PSDs for negative frequency for symmetrisation of homodyne (not important for S_XX)
-      ! CALL CALCULATE_SPECTRA(&
-      !       g_coupling, nbar, num_photons, &
-      !       theta_homodyne_pi, Delta, half_kappa, half_Gamma_M, &
-      !       omega_x, -omega_sweep, S_XX_value, &
-      !       S_homodyne, S_heterodyne)
-
-      ! ! update homodyne
-      ! A_homodyne = A_homodyne + S_homodyne
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-
-      ! work out same PSDs for positive and symmetrise homodyne
+      ! work out Power Spectral Density (PSD) of the homodyne, S_homodyne      
+      ! work out PSDs for negative frequency for symmetrisation of homodyne
+      ! NOTE: the call below is used for S_homodyne and S_heterodyne, not S_XX
       CALL CALCULATE_SPECTRA(&
-            method, &
-            g_coupling, nbar, num_photons, &
-            theta_homodyne_pi, Delta, half_kappa, half_Gamma_M, &
-            omega_x, omega_sweep, S_XX_value, &
-            S_homodyne, S_heterodyne)
+            expressions_choice, &
+            g_coupling, nbar, num_photons, theta_homodyne_pi, &
+            Delta, half_kappa, omega_M, half_Gamma_M, &
+            -omega_value, S_XX_value, S_homodyne_value, S_heterodyne_value)
+
+      ! update homodyne
+      S_homodyne_negative = S_homodyne_value
+
+      ! work out the same PSDs for positive frequencies
+      CALL CALCULATE_SPECTRA(&
+            expressions_choice, &
+            g_coupling, nbar, num_photons, theta_homodyne_pi, &
+            Delta, half_kappa, omega_M, half_Gamma_M, &
+            omega_value, S_XX_value, S_homodyne_value, S_heterodyne_value)
 
       S_XX_array(ii) = S_XX_value
+      S_heterodyne_array(ii) = S_heterodyne_value
 
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! ! update homodyne
-      ! A_homodyne = 0.5 * (A_homodyne + S_homodyne)
+      ! symmetrise S_homodyne
+      S_homodyne_value = 0.5 * (S_homodyne_negative + S_homodyne_value)
+      ! to find optimal squeezing
+      S_homodyne_array(ii) = S_homodyne_value
 
-      ! ! to find optimal squeezing
-      ! S_homodyne_array(ii) = A_homodyne
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      ! save omega, S_XX, S_aa (S_heterodyne), S_(Chi_theta.Chi_theta) (S_homodyne), to spectra.dat
+      ! Chi_theta = a * exp(-i*theta) + a^dagg * exp(+i*theta)
 
+      ! NOTE: saving omega/2π here means the x-axis for any plots is frequency (Hz), not angular frequency
+      WRITE(8, 101) omega_value/pi2, S_XX_value, S_heterodyne_value, S_homodyne_value
 
 11 END DO
 
-! back action limit - at zero pressure, this is the residual phonon number from optical noise
+! back action limit: at zero pressure, this is the residual phonon number from optical noise
 ! this should be the theoretical limit if Gamma_M is set to zero
-phonons_from_optical_noise = ((omega_x + Delta)**2 + half_kappa**2)/(-4 * omega_x * Delta)
-WRITE(6, *) 'x-axis back action limited phonons ='
-WRITE(6, 200) phonons_from_optical_noise
+! NOTE: assumes Delta is negative?
+phonons_from_optical_noise = ((omega_M + Delta)**2 + half_kappa**2)/(-4 * omega_M * Delta)
+WRITE(*, *) 'Back-action limited phonons:'
+WRITE(*, 500) phonons_from_optical_noise
 
 ! integrate the PSD for the (rescaled) position operator X^hat = (b + b^dagg)
 ! uses trapezoidal rule
-CALL INTEGRATE_SXX(num_points, omega_array, S_XX_array, area_under_S_XX)
-WRITE(6, *) 'Area under S_XX ='
-WRITE(6, 200) area_under_S_XX
+CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_XX_array, area_under_S_XX)
+WRITE(*, *) 'Area under S_XX:'
+WRITE(*, 500) area_under_S_XX
 
-! Area phonons_from_optical_noise corresponds to 2n+1 so convert to get n               
+CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_heterodyne_array, area_under_S_heterodyne)
+WRITE(*, *) 'Area under S_heterodyne:'
+WRITE(*, 500) area_under_S_heterodyne
+
+CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_homodyne_array, area_under_S_homodyne)
+WRITE(*, *) 'Area under S_homodyne:'
+WRITE(*, 500) area_under_S_homodyne
+
+
+! area_under_S_XX corresponds to 2n+1 so convert to get n = phonon occupancy of the oscillator
 num_phonons = 0.5d0 * (area_under_S_XX - 1.d0)
 
-! oscillator_temperature = area_under_S_XX * hbar * omega_x/BOLTZ
-! original code does the above i.e. goes straight from the area XRE (2n+1) to get TEMP
+! NOTE: original code goes straight from area "XRE" (2n+1) to get TEMP
 ! do more precisely with num_phonons (n) here
-oscillator_temperature = num_phonons * hbar * omega_x/BOLTZ
+oscillator_temperature = num_phonons * hbar * omega_M/kB
 
-WRITE(6, *) 'x-axis phonons from optomechancial cooling formula:'
-WRITE(6, 200) x_phonons_from_cooling_formula
-WRITE(6, *) 'x-axis phonons from S_XX sideband asymmetry:'
-WRITE(6, 200) num_phonons
-WRITE(6, *) 'Mechanical oscillator`s temperature /K'
-WRITE(6, 200) oscillator_temperature
+WRITE(*, *) 'Phonons from optomechancial cooling formula:'
+WRITE(*, 500) x_phonons_from_cooling_formula
+WRITE(*, *) 'Phonons from S_XX sideband asymmetry:'
+WRITE(*, 500) num_phonons
+WRITE(*, *) 'Mechanical oscillator`s temperature /K:'
+WRITE(*, 500) oscillator_temperature
 
-! 200 FORMAT(7E14.3)
-200 FORMAT(ES14.2)
 500 FORMAT(ES14.5)
 STOP
 END
 
 ! Formerly 'ANALYT'
 SUBROUTINE CALCULATE_SPECTRA(&
-      method, &
-      g_coupling, nbar, num_photons, &
-      theta_homodyne_pi, Delta, half_kappa, half_Gamma_M, &
-      omega_x, omega, S_XX_value, &
-      S_homodyne, S_heterodyne)   
+      expressions_choice, &
+      g_coupling, nbar, num_photons, theta_homodyne_pi, &
+      Delta, half_kappa, omega_M, half_Gamma_M, &
+      omega_value, S_XX_value, S_homodyne_value, S_heterodyne_value)
       ! """
       ! Generic routine for calculating the noise spectra of the trap and probe beams
       ! """
       IMPLICIT NONE
-      integer::N_total, method
+      integer::N_total, expressions_choice
       PARAMETER(N_total=4)
-      double precision::g_coupling, nbar, num_photons, theta_homodyne_pi, Gav
-      double precision::S_XX_value, S_homodyne, S_heterodyne
-      double precision::Delta, omega, omega_x, half_kappa, half_Gamma_M, omega_heterodyne, omega_addition
+      double precision::g_coupling, nbar, num_photons, theta_homodyne_pi
+      double precision::omega_value, S_XX_value, S_homodyne_value, S_heterodyne_value
+      double precision::Delta, half_kappa, omega_M, half_Gamma_M
       double complex::chi_C, chi_C_star, chi_M, chi_M_star
       double complex::BAX(1, N_total), A1(1, N_total), A1dagg(1, N_total)
 
       ! My alternatives with just the 1D arrays needed
-      double complex::X_hat_vector(N_total), a_vector(N_total), a_dagg_vector(N_total)
+      double complex, DIMENSION(N_total)::X_hat_vector, a_vector, a_dagg_vector
 
-      ! first get the susceptibilities                    
+      ! make sure to reset this to zero
+      S_XX_value = 0.d0
+
+      ! first get the susceptibilities
       CALL CALCULATE_SUSCEPTIBILITIES(&
-            omega, omega_x, &
+            omega_value, omega_M, &
             Delta, half_kappa, half_Gamma_M, &
             chi_C, chi_C_star, chi_M, chi_M_star)
 
-      IF (method == 1) THEN
-            ! work out noise vector for X^hat, a and a^dagg
+      ! work out noise vectors for X^hat, a and a^dagg - to get S_XX values
+      IF (expressions_choice == 1) THEN
             CALL CALCULATE_NOISE_VECTORS(&
-                  g_coupling, half_Gamma_M, half_kappa, &
+                  g_coupling, half_kappa, half_Gamma_M, &
                   chi_C, chi_C_star, chi_M, chi_M_star, &
                   BAX, A1, A1dagg)
 
-            ! Note: this isn't halved, implying X^hat = (b + b^dagg) i.e. with no sqrt(0.5) factor
-            S_XX_value = (abs(BAX(1, 1)))**2 + (nbar + 1) * (abs(BAX(1, 3)))**2 + nbar * (abs(BAX(1, 4)))**2
+            ! NOTE: this ignores num_photons (which is set to zero for now anyway)
+            S_XX_value = (abs(BAX(1, 1)))**2
+            S_XX_value = S_XX_value + (abs(BAX(1, 3)))**2 * (nbar + 1)
+            S_XX_value = S_XX_value + (abs(BAX(1, 4)))**2 * nbar
 
-      ELSE IF (method == 2) THEN
-            ! My alternative using the back-action expressions
-            ! NOTE: Putting these expressions in Mathematica match exactly with my manually derived ones
+      ELSE IF (expressions_choice == 2) THEN
+            ! my alternative using the back-action expressions
+            ! NOTE: putting these expressions in Mathematica match exactly with my manually derived ones
             CALL CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
-                  g_coupling, half_Gamma_M, half_kappa, &
+                  g_coupling, half_kappa, half_Gamma_M, &
                   chi_C, chi_C_star, chi_M, chi_M_star, &
                   X_hat_vector, a_vector, a_dagg_vector)
-                  
-            S_XX_value = (abs(X_hat_vector(1)))**2 + (nbar + 1) * (abs(X_hat_vector(3)))**2 + nbar * (abs(X_hat_vector(4)))**2
 
-      ELSE IF (method == 3) THEN
-            ! My alternative using manually derived expressions
+            S_XX_value = S_XX_value + (abs(X_hat_vector(1)))**2 * (num_photons + 1)
+            S_XX_value = S_XX_value + (abs(X_hat_vector(2)))**2 * num_photons
+            S_XX_value = S_XX_value + (abs(X_hat_vector(3)))**2 * (nbar + 1)
+            S_XX_value = S_XX_value + (abs(X_hat_vector(4)))**2 * nbar
+
+      ELSE IF (expressions_choice == 3) THEN
+            ! my alternative using manually derived expressions
             CALL CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
-                  g_coupling, half_Gamma_M, half_kappa, &
+                  g_coupling, half_kappa, half_Gamma_M, &
                   chi_C, chi_C_star, chi_M, chi_M_star, &
                   X_hat_vector, a_vector, a_dagg_vector)
 
-            S_XX_value = (abs(X_hat_vector(1)))**2 + (nbar + 1) * (abs(X_hat_vector(3)))**2 + nbar * (abs(X_hat_vector(4)))**2
+            S_XX_value = S_XX_value + (abs(X_hat_vector(1)))**2 * (num_photons + 1)
+            S_XX_value = S_XX_value + (abs(X_hat_vector(2)))**2 * num_photons
+            S_XX_value = S_XX_value + (abs(X_hat_vector(3)))**2 * (nbar + 1)
+            S_XX_value = S_XX_value + (abs(X_hat_vector(4)))**2 * nbar
 
       END IF
 
-      ! COMPARE ALTERNATIVES - this verified that N0X was equal to X_hat_vector
-      ! IF (ALL(N0X /= X_hat_vector)) THEN
-      !       WRITE(6, *) 'THIS IS AN ERROR????'
-      !       WRITE(6, 500) N0X
-      !       WRITE(6, *) '-------'
-      !       WRITE(6, 500) X_hat_vector
-      ! ELSE
-      !       WRITE(6, *) 'THIS IS OKAY'
-      ! END IF
-      ! 500 FORMAT(ES14.5)
+      ! NOTE: Before calculating the heterodyne spectrum, the original script allows for shifting
+      ! omega by a certain "heterodyne-beat-shifted" amount to calculate new susceptiblity values,
+      ! which are then used to calculate new noise spectra. These new noise spectra are then used to
+      ! calculate the heterodyne spectrum. This is not needed for now.
 
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! ! work out homodyne spectra using same vectors
-      ! CALL HOMODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_homodyne)
+      ! work out the homodyne and heterodyne and homodyne spectra using same vectors
+      IF (expressions_choice == 1) THEN
+            CALL HOMODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_homodyne_value)
+            CALL HETERODYNE(N_total, nbar, num_photons, A1dagg, S_heterodyne_value)
+      ELSE
+            CALL HOMODYNE_2(N_total, nbar, num_photons, theta_homodyne_pi, a_vector, a_dagg_vector, S_homodyne_value)
+            CALL HETERODYNE_2(N_total, nbar, num_photons, a_dagg_vector, S_heterodyne_value)
+      END IF
 
-      ! ! ! work out homodyne spectra using same vectors
-      ! ! CALL HOMODYNE_2(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_homodyne)
+      ! NOTE: minus 1 here is due to the input-output relation
+      S_homodyne_value = (S_homodyne_value - 1.d0)/abs(chi_C - chi_C_star)**2/g_coupling**2/half_kappa/2.
 
-      ! S_homodyne = (S_homodyne - 1.d0)/abs(chi_C - chi_C_star)**2/g_coupling**2/half_kappa/2.
-
-      ! ! work out heterodyne for positive frequency branch.
-      ! !  Shift frequency by heterodyne beat.
-
-      ! ! FOR THIS EXAMPLE JUST QUADRUPLE MECHANICAL FREQUENCY.
-      ! omega_addition = omega_x * 4.d0
-      ! omega_addition = 0.d0
-      ! omega_heterodyne = (omega + omega_addition)
-
-      ! ! work out susceptibilities shifted in frequency
-      ! CALL CALCULATE_SUSCEPTIBILITIES(&
-      !       omega_heterodyne, omega_x, &
-      !       Delta, half_kappa, half_Gamma_M, &
-      !       chi_C, chi_C_star, chi_M, chi_M_star)
-
-      ! ! work out noise vector again
-      ! CALL CALCULATE_NOISE_VECTORS(&
-      !       g_coupling, half_Gamma_M, half_kappa, &
-      !       chi_C, chi_C_star, chi_M, chi_M_star, &
-      !       BAX, A1, A1dagg)
-
-      ! CALL HETERODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_heterodyne)
-      ! ! WRITE(6, *) omega_heterodyne, S_heterodyne, (S_heterodyne)/abs(chi_C)**2/GMAT(1)**2
-      ! S_heterodyne=(S_heterodyne - 1.d0)/abs(chi_C_star)**2/Gav**2/half_kappa/2.
-      ! ! S_heterodyne = S_heterodyne - 1.d0
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      ! TODO: understand derivation of this expression
+      ! - minus 1 is also due to the input-output relation
+      ! - why only chi_C_star and not chi_C - chi_C_star like for the homodyne?
+      S_heterodyne_value = (S_heterodyne_value - 1.d0)/abs(chi_C_star)**2/g_coupling**2/half_kappa/2.
 
       RETURN
 END
 
-! THE BELOW IS NOT USED FOR S_XX
-! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-! SUBROUTINE HOMODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_homodyne)
-!       ! """
-!       ! Work out homodyne spectra
-!       ! """
-!       IMPLICIT NONE
-!       integer::ii, N_total
-!       double precision:: theta_homodyne_pi, S_homodyne, nbar, num_photons
-!       double complex::imag_n
-!       double complex::homodyne_noise_vector(1, N_total)
-!       double complex::PY_hat_vector(1, N_total), Y_hat_vector(1, N_total)
-!       double complex::A1(1, N_total)
-!       double complex::A1dagg(1, N_total)
+SUBROUTINE HOMODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_homodyne)
+      ! """
+      ! Work out homodyne spectra
+      ! """
+      IMPLICIT NONE
+      integer::ii, N_total
+      double precision::theta_homodyne_pi, theta, S_homodyne, nbar, num_photons
+      double complex::imag_n
+      double complex::homodyne_noise_vector(1, N_total)
+      double complex::PY_hat_vector(1, N_total), Y_hat_vector(1, N_total)
+      double complex::A1(1, N_total)
+      double complex::A1dagg(1, N_total)
 
-!       ! i
-!       imag_n = cmplx(0.d0, 1.d0)
-!       DO ii = 1, N_total
-!             ! optical field quadrature
-!             Y_hat_vector(1, ii) = A1(1, ii) + A1dagg(1, ii)
-!             ! photon momentum operator
-!             PY_hat_vector(1, ii) = imag_n * (A1(1, ii) - A1dagg(1, ii))
-!             ! since theta_homodyne_pi is set to 0, homodyne_noise_vector = Y_hat_vector
-!             ! Therefore S_@@ = S_YY (@=theta)
-!             homodyne_noise_vector(1, ii) = PY_hat_vector(1, ii) * sin(theta_homodyne_pi) + Y_hat_vector(1, ii) * cos(theta_homodyne_pi)
-!       END DO
+      theta = theta_homodyne_pi
+      ! i
+      imag_n = cmplx(0.d0, 1.d0)
+      DO ii = 1, N_total
+            ! optical field "amplitude" quadrature (photon position operator)
+            ! Y^hat = (a^dagg + a)
+            Y_hat_vector(1, ii) = A1(1, ii) + A1dagg(1, ii)
 
-!       S_homodyne = 0.d0
-!       S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 1))**2 * num_photons + abs(homodyne_noise_vector(1, 2))**2 * (num_photons + 1.d0)
-!       S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 3))**2 * nbar + abs(homodyne_noise_vector(1, 4))**2 * (nbar + 1.d0)
+            ! optical field "phase" quadratrue (photon momentum operator)
+            ! PY^hat = i*(a^dagg - a)
+            ! TODO: the original has this other way around? P = i(a - a^dagg) ... which is wrong?
+            ! PY_hat_vector(1, ii) = imag_n * (A1(1, ii) - A1dagg(1, ii))
+            PY_hat_vector(1, ii) = imag_n * (A1dagg(1, ii) - A1(1, ii))
+
+            ! since theta_homodyne_pi is set to 0, homodyne_noise_vector = Y_hat_vector
+            ! Therefore S_@@ = S_YY (@=theta)
+            homodyne_noise_vector(1, ii) = PY_hat_vector(1, ii) * sin(theta) + Y_hat_vector(1, ii) * cos(theta)
+      END DO
+
+      S_homodyne = 0.d0
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 1))**2 * num_photons
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 2))**2 * (num_photons + 1.d0)
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 3))**2 * nbar
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 4))**2 * (nbar + 1.d0)
  
-!       RETURN
-! END
+      RETURN
+END
 
 
 ! My own version with 1D vectors
-! SUBROUTINE HOMODYNE_2(N_total, nbar, num_photons, theta_homodyne_pi, a_vector, a_dagg_vector, S_homodyne)
-!       ! """
-!       ! Work out homodyne spectra
-!       ! """
-!       IMPLICIT NONE
-!       integer::ii, N_total
-!       double precision:: theta_homodyne_pi, S_homodyne, nbar, num_photons
-!       double complex::imag_n
-!       double complex::homodyne_noise_vector(N_total), PY_hat_vector(N_total), Y_hat_vector(N_total)
-!       double complex::a_vector(N_total), a_dagg_vector(N_total)
+SUBROUTINE HOMODYNE_2(N_total, nbar, num_photons, theta_homodyne_pi, a_vector, a_dagg_vector, S_homodyne)
+      ! """
+      ! Work out homodyne spectra
+      ! """
+      IMPLICIT NONE
+      integer::ii, N_total
+      double precision:: theta_homodyne_pi, S_homodyne, nbar, num_photons
+      double complex::imag_n
+      double complex::homodyne_noise_vector(N_total), PY_hat_vector(N_total), Y_hat_vector(N_total)
+      double complex::a_vector(N_total), a_dagg_vector(N_total)
 
-!       ! i
-!       imag_n = cmplx(0.d0, 1.d0)
-!       DO ii = 1, N_total
-!             ! optical field quadrature
-!             Y_hat_vector(ii) = a_vector(ii) + a_dagg_vector(ii)
-!             ! photon momentum operator
-!             PY_hat_vector(ii) = imag_n * (a_vector(ii) - a_dagg_vector(ii))
-!             ! since theta_homodyne_pi is set to 0, homodyne_noise_vector = Y_hat_vector
-!             ! Therefore S_@@ = S_YY (@=theta)
-!             homodyne_noise_vector(ii) = PY_hat_vector(ii) * sin(theta_homodyne_pi) + Y_hat_vector(ii) * cos(theta_homodyne_pi)
-!       END DO
+      ! i
+      imag_n = cmplx(0.d0, 1.d0)
+      DO ii = 1, N_total
+            ! optical field "amplitude" quadrature (photon position operator)
+            ! Y^hat = (a^dagg + a)
+            Y_hat_vector(ii) = a_dagg_vector(ii) + a_vector(ii)
 
-!       S_homodyne = 0.d0
-!       S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 1))**2 * num_photons + abs(homodyne_noise_vector(1, 2))**2 * (num_photons + 1.d0)
-!       S_homodyne = S_homodyne + abs(homodyne_noise_vector(1, 3))**2 * nbar + abs(homodyne_noise_vector(1, 4))**2 * (nbar + 1.d0)
- 
-!       RETURN
-! END
+            ! optical field "phase" quadratrue (photon momentum operator)
+            ! PY^hat = i*(a^dagg - a)
+            ! TODO: the original has this other way around? P = i(a - a^dagg) ... which is wrong?
+            PY_hat_vector(ii) = imag_n * (a_dagg_vector(ii) - a_vector(ii))
 
+            ! since theta_homodyne_pi is set to 0, homodyne_noise_vector = Y_hat_vector
+            ! Therefore S_@@ = S_YY (@=theta)
+            homodyne_noise_vector(ii) = PY_hat_vector(ii) * sin(theta_homodyne_pi) + Y_hat_vector(ii) * cos(theta_homodyne_pi)
+      END DO
 
-! SUBROUTINE HETERODYNE(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_heterodyne)
-!       IMPLICIT NONE
-!       integer::ii, N_total
-!       double precision::THETA, S_heterodyne, nbar, num_photons
-      
-!       double complex::imag_n
-!       !double complex::XTHET1(1,N_total)
-!       double complex:: PY_hat_vector(1, N_total), Y_hat_vector(1, N_total)
-!       double complex:: A1(1, N_total)
-!       double complex:: A1dagg(1, N_total), heterodyne_noise_vector(1, N_total)
-      
-!       ! (0 + i)
-!       imag_n = cmplx(0.d0, 1.d0)
-!       DO ii = 1, N_total
-!             !        Y_hat_vector(1, ii) = A1(1, ii) + A1dagg(1, ii)
-!             !        PY_hat_vector(1, ii) = imag_n * (A1(1, ii) - A1dagg(1, ii))
-!             !        heterodyne_noise_vector(1, ii) = PY_hat_vector(1, ii) * sin(theta_homodyne_pi) + Y_hat_vector(1, ii) * cos(theta_homodyne_pi)
-!             heterodyne_noise_vector(1, ii) = A1dagg(1, ii)
-!       END DO
-!       S_heterodyne = 0.d0
-      
-!       S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 1))**2 * num_photons + abs(heterodyne_noise_vector(1, 2))**2 * (num_photons + 1.d0)
-!       S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 3))**2 * nbar + abs(heterodyne_noise_vector(1, 4))**2 * (nbar + 1.d0)
-      
-!       RETURN
-! END
+      S_homodyne = 0.d0
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(1))**2 * num_photons
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(2))**2 * (num_photons + 1.d0)
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(3))**2 * nbar
+      S_homodyne = S_homodyne + abs(homodyne_noise_vector(4))**2 * (nbar + 1.d0)
 
-! ! My own version with 1D vectors
-! SUBROUTINE HETERODYNE_2(N_total, nbar, num_photons, theta_homodyne_pi, A1, A1dagg, S_heterodyne)
-!       IMPLICIT NONE
-!       integer::ii, N_total
-!       double precision::theta_homodyne_pi, S_heterodyne, nbar, num_photons      
-!       double complex::imag_n
-!       double complex::PY_hat_vector(N_total), Y_hat_vector(N_total)
-!       double complex::a_vector(N_total), a_dagg_vector(N_total), heterodyne_noise_vector(N_total)
-      
-!       ! (0 + i)
-!       imag_n = cmplx(0.d0, 1.d0)
-!       DO ii = 1, N_total
-!             !        Y_hat_vector(ii) = A1(ii) + A1dagg(ii)
-!             !        PY_hat_vector(ii) = imag_n * (A1(ii) - A1dagg(ii))
-!             !        heterodyne_noise_vector(ii) = PY_hat_vector(ii) * sin(theta_homodyne_pi) + Y_hat_vector(ii) * cos(theta_homodyne_pi)
-!             heterodyne_noise_vector(ii) = A1dagg(ii)
-!       END DO
-!       S_heterodyne = 0.d0
-      
-!       S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1))**2 * num_photons + abs(heterodyne_noise_vector(2))**2 * (num_photons + 1.d0)
-!       S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(3))**2 * nbar + abs(heterodyne_noise_vector(4))**2 * (nbar + 1.d0)
-      
-!       RETURN
-! END
+      RETURN
+END
 
 
-! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+SUBROUTINE HETERODYNE(N_total, nbar, num_photons, A1dagg, S_heterodyne)
+      IMPLICIT NONE
+      integer::ii, N_total
+      double precision::S_heterodyne, nbar, num_photons
+      double complex::imag_n
+      double complex::A1dagg(1, N_total), heterodyne_noise_vector(1, N_total)
+      
+      ! (0 + i)
+      imag_n = cmplx(0.d0, 1.d0)
+      DO ii = 1, N_total
+            heterodyne_noise_vector(1, ii) = A1dagg(1, ii)
+      END DO
+
+      S_heterodyne = 0.d0
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 1))**2 * num_photons
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 2))**2 * (num_photons + 1.d0)
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 3))**2 * nbar
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1, 4))**2 * (nbar + 1.d0)
+      
+      RETURN
+END
+
+! My own version with 1D vectors
+SUBROUTINE HETERODYNE_2(N_total, nbar, num_photons, a_dagg_vector, S_heterodyne)
+      IMPLICIT NONE
+      integer::ii, N_total
+      double precision::S_heterodyne, nbar, num_photons
+      double complex::imag_n
+      double complex, DIMENSION(N_total)::a_dagg_vector, heterodyne_noise_vector
+      
+      ! (0 + i)
+      imag_n = cmplx(0.d0, 1.d0)
+      DO ii = 1, N_total
+            ! TODO: understand how to express this fully like with the sin's and cos's in HOMODYNE
+            heterodyne_noise_vector(ii) = a_dagg_vector(ii)
+      END DO
+
+      S_heterodyne = 0.d0
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(1))**2 * num_photons
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(2))**2 * (num_photons + 1.d0)
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(3))**2 * nbar
+      S_heterodyne = S_heterodyne + abs(heterodyne_noise_vector(4))**2 * (nbar + 1.d0)
+      RETURN
+END
+
 
 ! Formerly 'SUSCEPT'
 SUBROUTINE CALCULATE_SUSCEPTIBILITIES(&
-      omega, omega_x, &
+      omega, omega_M, &
       Delta, half_kappa, half_Gamma_M, &
       chi_C, chi_C_star, chi_M, chi_M_star)
       ! """
       ! Calculates the optical (chi_C, chi_C_star) and mechanical (chi_M, chi_M_star) susceptibilities
       ! """
       IMPLICIT NONE 
-      double precision::omega, omega_x
+      double precision::omega, omega_M
       double precision::Delta, half_Gamma_M, half_kappa
       double complex::chi_C, chi_C_star, chi_M, chi_M_star
       double precision::chi_real, chi_imag, chi_denominator
 
-      ! Optical susceptibilities
+      ! optical susceptibilities
       ! chi_C
       chi_denominator = half_kappa**2 + (omega + Delta)**2
       chi_real = half_kappa/chi_denominator
@@ -420,17 +461,17 @@ SUBROUTINE CALCULATE_SUSCEPTIBILITIES(&
       chi_imag = (-omega + Delta)/chi_denominator
       chi_C_star = cmplx(chi_real, -chi_imag)
 
-      ! x-axis mechanical susceptibilities
+      ! mechanical susceptibilities
       ! chi_M
-      chi_denominator = (half_Gamma_M)**2 + (omega - omega_x)**2
+      chi_denominator = (half_Gamma_M)**2 + (omega - omega_M)**2
       chi_real =  (half_Gamma_M)/chi_denominator
-      chi_imag = (omega - omega_x)/chi_denominator
+      chi_imag = (omega - omega_M)/chi_denominator
       chi_M = cmplx(chi_real, chi_imag)
 
       ! chi_M*(-omega) - i.e. turn omega into -omega, then chi_imag into -chi_imag.
-      chi_denominator = (half_Gamma_M)**2 + (-omega - omega_x)**2
+      chi_denominator = (half_Gamma_M)**2 + (-omega - omega_M)**2
       chi_real =  (half_Gamma_M)/chi_denominator
-      chi_imag = (-omega - omega_x)/chi_denominator
+      chi_imag = (-omega - omega_M)/chi_denominator
       chi_M_star = cmplx(chi_real, -chi_imag)
 
       RETURN
@@ -438,7 +479,7 @@ END
 
 ! Formerly 'Avect'
 SUBROUTINE CALCULATE_NOISE_VECTORS(&
-      g_coupling, half_Gamma_M, half_kappa, &
+      g_coupling, half_kappa, half_Gamma_M, &
       chi_C, chi_C_star, chi_M, chi_M_star, &
       BAX, A1, A1dagg)
       ! """
@@ -449,10 +490,10 @@ SUBROUTINE CALCULATE_NOISE_VECTORS(&
       IMPLICIT NONE
       integer::ii, N_total
       double precision::Sqrtkapp
-      double precision::g_coupling, half_Gamma_M, half_kappa, sqrt_Gamma_M
+      double precision::g_coupling, half_kappa, half_Gamma_M, sqrt_Gamma_M
       PARAMETER(N_total=4)
-      double complex::chi_C, chi_C_star, chi_CBA
-      double complex::chi_M, chi_M_star, chi_MBA
+      double complex::chi_C, chi_C_star
+      double complex::chi_M, chi_M_star
       double complex::one, imag_n
 
       double complex::CMX, eta_C, eta_M, CA1, CA1dagg, BETX
@@ -491,39 +532,36 @@ SUBROUTINE CALCULATE_NOISE_VECTORS(&
             BAX(1, ii) = N0X(ii) 
       END DO
 
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! ! now work out the optical trap field, a
-      ! CA1 = imag_n * chi_C
-      ! ! now work out the photon field, a^dagg
-      ! CA1dagg = -imag_n * chi_C_star
+      ! now work out the optical trap field, a
+      CA1 = imag_n * chi_C
+      ! now work out the photon field, a^dagg
+      CA1dagg = -imag_n * chi_C_star
 
-      ! DO ii = 1, N_total
-      !       A1(1, ii) = CA1 * g_coupling * BAX(1, ii)
-      !       A1dagg(1, ii) = CA1dagg * g_coupling * BAX(1, ii)
-      ! END DO
+      DO ii = 1, N_total
+            A1(1, ii) = CA1 * g_coupling * BAX(1, ii)
+            A1dagg(1, ii) = CA1dagg * g_coupling * BAX(1, ii)
+      END DO
 
-      ! ! add shot or incoming noise
-      ! ! trap beam: add cavity-filtered contribution
-      ! A1(1, 1) = A1(1, 1) + Sqrtkapp * chi_C
-      ! A1dagg(1, 2) = A1dagg(1, 2) + Sqrtkapp * chi_C_star
+      ! add shot or incoming noise
+      ! trap beam: add cavity-filtered contribution
+      A1(1, 1) = A1(1, 1) + Sqrtkapp * chi_C
+      A1dagg(1, 2) = A1dagg(1, 2) + Sqrtkapp * chi_C_star
       
-      ! ! cavity output : add incoming imprecision
-      ! ! work out a_out = a_in - Sqrtkapp(a)
-      ! DO ii = 1, N_total
-      !       A1(1, ii) = -A1(1, ii) * Sqrtkapp
-      !       A1dagg(1, ii) = -A1dagg(1, ii) * Sqrtkapp
-      ! END DO
+      ! cavity output : add incoming imprecision
+      ! work out a_out = a_in - Sqrtkapp * a
+      DO ii = 1, N_total
+            A1(1, ii) = -A1(1, ii) * Sqrtkapp
+            A1dagg(1, ii) = -A1dagg(1, ii) * Sqrtkapp
+      END DO
       
-      ! A1(1, 1) = one + A1(1, 1)
-      ! A1dagg(1, 2) = one + A1dagg(1, 2)
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      A1(1, 1) = one + A1(1, 1)
+      A1dagg(1, 2) = one + A1dagg(1, 2)
       
       RETURN
 END
 
 SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
-      g_coupling, half_Gamma_M, half_kappa, &
+      g_coupling, half_kappa, half_Gamma_M, &
       chi_C, chi_C_star, chi_M, chi_M_star, &
       X_hat_vector, a_vector, a_dagg_vector)
       ! """
@@ -534,7 +572,7 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
       ! """
       IMPLICIT NONE
       integer::ii, N_total
-      double precision::g_coupling, half_Gamma_M, half_kappa, sqrt_kappa, sqrt_Gamma_M
+      double precision::g_coupling, half_kappa, half_Gamma_M, sqrt_kappa, sqrt_Gamma_M
       PARAMETER(N_total=4)
       double complex::one, imag_n, ig, nu
       double complex::chi_C, chi_C_star, chi_CBA
@@ -578,38 +616,35 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_BACK_ACTIONS(&
       ! f_2 = k_M2 + k_M1_star i.e. for b_in^dagg
       X_hat_vector(4) = nu * sqrt_Gamma_M * chi_M_star
 
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! DO ii = 1, N_total
-      !       ! now work out the optical trap field, a
-      !       a_vector(ii) = ig * chi_C * X_hat_vector(ii)
-      !       ! now work out the photon field, a^dagg
-      !       a_dagg_vector(ii) = -ig * chi_C_star * X_hat_vector(ii)
-      ! END DO
+      DO ii = 1, N_total
+            ! now work out the optical trap field, a
+            a_vector(ii) = ig * chi_C * X_hat_vector(ii)
+            ! now work out the photon field, a^dagg
+            a_dagg_vector(ii) = -ig * chi_C_star * X_hat_vector(ii)
+      END DO
 
-      ! ! add shot or incoming noise
-      ! ! trap beam: add cavity-filtered contribution
-      ! a_vector(1) = a_vector(1) + sqrt_kappa * chi_C
-      ! a_dagg_vector(2) = a_dagg_vector(2) + sqrt_kappa * chi_C_star
+      ! add shot or incoming noise
+      ! trap beam: add cavity-filtered contribution
+      a_vector(1) = a_vector(1) + sqrt_kappa * chi_C
+      a_dagg_vector(2) = a_dagg_vector(2) + sqrt_kappa * chi_C_star
       
-      ! ! cavity output: add incoming imprecision
-      ! ! work out a_out = a_in - sqrt_kappa * a
-      ! DO ii = 1, N_total
-      !       a_vector(ii) = -a_vector(ii) * sqrt_kappa
-      !       a_dagg_vector(ii) = -a_dagg_vector(ii) * sqrt_kappa
-      ! END DO
+      ! cavity output: add incoming imprecision
+      ! work out a_out = a_in - sqrt_kappa * a
+      DO ii = 1, N_total
+            a_vector(ii) = -a_vector(ii) * sqrt_kappa
+            a_dagg_vector(ii) = -a_dagg_vector(ii) * sqrt_kappa
+      END DO
       
-      ! a_vector(1) = one + a_vector(1)
-      ! a_dagg_vector(2) = one + a_dagg_vector(2)
-      ! ! TODO: write out expressions implied by the above for a and a^dagg
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      ! TODO: understand why this is the input-output relation a_out = a_in - sqrt_kappa * a
+      a_vector(1) = one + a_vector(1)
+      a_dagg_vector(2) = one + a_dagg_vector(2)
 
       RETURN
 END
 
 
 SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
-      g_coupling, half_Gamma_M, half_kappa, &
+      g_coupling, half_kappa, half_Gamma_M, &
       chi_C, chi_C_star, chi_M, chi_M_star, &
       X_hat_vector, a_vector, a_dagg_vector)
       ! """
@@ -619,8 +654,8 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
       ! (alternative but equivalent expressions I derived manually)
       ! """
       IMPLICIT NONE
-      integer::N_total
-      double precision::g_coupling, half_Gamma_M, half_kappa, sqrt_kappa, sqrt_Gamma_M
+      integer::ii, N_total
+      double precision::g_coupling, half_kappa, half_Gamma_M, sqrt_kappa, sqrt_Gamma_M
       PARAMETER(N_total=4)
       double complex::one, imag_n, ig
       double complex::chi_C, chi_C_star, chi_CBA
@@ -690,56 +725,56 @@ SUBROUTINE CALCULATE_NOISE_VECTORS_VIA_MANUAL_DERIVATIONS(&
       ! f_2 = k_M2 + k_M1_star i.e. for b_in^dagg
       X_hat_vector(4) = k_M2 + k_M1_star
 
-      ! THE BELOW IS NOT USED FOR S_XX
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      ! DO ii = 1, N_total
-      !       ! now work out the optical trap field, a
-      !       a_vector(ii) = ig * chi_C * X_hat_vector(ii)
-      !       ! now work out the photon field, a^dagg
-      !       a_dagg_vector(ii) = -ig * chi_C_star * X_hat_vector(ii)
-      ! END DO
+      ! TODO: simplify the below (understand how a ~ X_hat_vector)
+      DO ii = 1, N_total
+            ! now work out the optical trap field, a
+            a_vector(ii) = ig * chi_C * X_hat_vector(ii)
+            ! now work out the photon field, a^dagg
+            a_dagg_vector(ii) = -ig * chi_C_star * X_hat_vector(ii)
+      END DO
 
-      ! ! add shot or incoming noise
-      ! ! trap beam: add cavity-filtered contribution
-      ! a_vector(1) = a_vector(1) + sqrt_kappa * chi_C
-      ! a_dagg_vector(2) = a_dagg_vector(2) + sqrt_kappa * chi_C_star
+      ! add shot or incoming noise
+      ! trap beam: add cavity-filtered contribution
+      a_vector(1) = a_vector(1) + sqrt_kappa * chi_C
+      a_dagg_vector(2) = a_dagg_vector(2) + sqrt_kappa * chi_C_star
       
-      ! ! cavity output: add incoming imprecision
-      ! ! work out a_out = a_in - sqrt_kappa * a
-      ! DO ii = 1, N_total
-      !       a_vector(ii) = -a_vector(ii) * sqrt_kappa
-      !       a_dagg_vector(ii) = -a_dagg_vector(ii) * sqrt_kappa
-      ! END DO
+      ! cavity output: add incoming imprecision
+      ! work out a_out = a_in - sqrt_kappa * a
+      DO ii = 1, N_total
+            a_vector(ii) = -a_vector(ii) * sqrt_kappa
+            a_dagg_vector(ii) = -a_dagg_vector(ii) * sqrt_kappa
+      END DO
       
-      ! a_vector(1) = one + a_vector(1)
-      ! a_dagg_vector(2) = one + a_dagg_vector(2)
-      ! ! TODO: write out expressions implied by the above for a and a^dagg
-      ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      a_vector(1) = one + a_vector(1)
+      a_dagg_vector(2) = one + a_dagg_vector(2)
 
       RETURN
 END
 
 
 ! Formerly 'NORM1'
-SUBROUTINE INTEGRATE_SXX(num_points, omega_array, S_XX_array, area_under_S_XX)
+SUBROUTINE INTEGRATE_SPECTRUM(num_points, omega_increment, spectrum_array, area_under_spectrum)
       IMPLICIT NONE 
       integer::ii, num_points
-      double precision::pi2, area_under_S_XX, trapeze_base
-      double precision, DIMENSION(num_points)::omega_array
-      double precision::S_XX_array(num_points)
+      double precision::omega_increment, area_under_spectrum, trapeze_base, pi2
+      double precision::spectrum_array(num_points)
      
       pi2 = 2.d0 * dacos(-1.d0)
 
       ! integrate the position spectrum of bead
-      ! quick hack - use trapezoidal rule - improve later
+      ! quick hack - use trapezoidal rule - improve later?
+      ! each trapeze base is the omega_increment i.e. omega_range/num_points 
 
-      ! each trapeze base is the step size in the omega_array i.e. max_omega/num_points 
-      trapeze_base = abs(omega_array(2) - omega_array(1))
+      ! NOTE: divide by 2π to convert omega to non-angular frequency (Hz)
+      ! this means the area is the area under the spectrum curve plotted vs. Hz
+      trapeze_base = omega_increment/pi2
+
+      ! different variables are used, but reset this here just to make sure
+      area_under_spectrum = 0.d0
       DO ii = 1, num_points - 1
-            area_under_S_XX = area_under_S_XX + 0.5d0 * (S_XX_array(ii) + S_XX_array(ii + 1))
+            area_under_spectrum = area_under_spectrum + 0.5d0 * (spectrum_array(ii) + spectrum_array(ii + 1))
       END DO
+      area_under_spectrum = area_under_spectrum * trapeze_base
 
-      ! this is equal to 2n+1
-      area_under_S_XX = area_under_S_XX * trapeze_base/pi2
       RETURN
 END

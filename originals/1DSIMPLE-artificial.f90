@@ -12,16 +12,16 @@
 !*********************************************************
 !*********************************************
      IMPLICIT NONE
-     integer  ::ll,kk,mm,it,im,ii,jj,NT,ithet,Nthet,Nx0,ix0,Ndet
+     integer  ::ll,kk,mm,it,im,ii,jj,NT,Nx0,ix0
 
         integer  ::NTOT,NPERIOD,NPTS
      double precision::R0,RHO,EPSR,EPSI0,C,hbar,BOLTZ,TEMP,Gravity
      double precision::WK,waist,XL,Finesse,Press,WX,WY,DelFSR
-      double precision::PIN1,DET1,X0,Y0,Z0,Theta0,Thetahom,Delx0,XX0,Deldet,DET2PIini,test
+      double precision::PIN1,DET1,X0,Y0,Z0,Theta0,Thetahom,DET2PIini
       double precision::Delthet,cavphotn
 ! parameter file with input values
      include 'CSCAVITY-1D.h'
-       Parameter(Nthet=1,Delthet=0.01d0,Ndet=1,Deldet=20.d3,Thetahom=0.d0,NPTS=10000)
+       Parameter(Thetahom=0.d0,NPTS=10000)
         double precision::OMx,OMy,OMz
 !calculated  parameters
 !
@@ -30,10 +30,11 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
        double precision:: XMAX,DEL,GX
 
         double precision::pi,pi2,OMsweep,XXQM,SHOM1,AHOM1,SHET1,XXQMs
-        double precision:: TPERIOD,AVNX,AVPHOT,AVRE,OPTOCOOL,PHONONS
-       double precision::COOLX,TEMPX,TBATH
+        double precision:: TPERIOD,AVNX,AVPHOT,AVRE
+       double precision::TEMPX,TBATH,C1,C2,C3,C4,COOLx,PHONX
+
 ! read parameter file with input values
-       DOUBLE PRECISION::GMAT(6)
+  
       DOUBLE PRECISION::PHON(3),AV(3)
         DOUBLE PRECISION, DIMENSION(NPTS):: SXXQM,OMSTOR,Shom
          DOUBLE COMPLEX::XI,ZOM
@@ -42,54 +43,56 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 !***************************************************************
 ! Here plot optical field amplitudes
-     OPEN(8,file="FTanX.dat",status="unknown")
-     OPEN(10,file="FTanOPT.dat",status="unknown")
+!      OPEN(8,file="FTanX-artificial.dat",status="unknown")
+!      OPEN(10,file="FTanOPT-artificial.dat",status="unknown")
     open(14,file="PHONS.dat",status="unknown")
+
 !
    pi=dacos(-1.d0)
    pi2=2.d0*pi
-   DET2PIini=DET1*pi2
-    TBATH=TEMP
+ 
+    TBATH=300.
     NT=NTOT
-
-!  OPEN LOOP OVER DEtuning or homodyne angle.   &&&&&&&&&&&&&&&&&&&&&&&
-!     do  10 ithet=1,Nthet
-    do  10 ix0=1,Ndet
-     DET2PI=DET2PIini+Deldet*pi*2*(ix0-1)
-      write(6,*)'detuning',Det2pi/2/pi
-!     thet=theta0+Delthet*(ithet-1)
-      thet=theta0
-!     XX0=Wk*x0+(ix0-1)*Delx0
-       xx0=Wk*x0
-      Wkx0=xx0
-     thet=thet*pi
+    
+! homodyne angle
       THEhom=Thetahom*pi
-      write(6,*)'theta/pi', thet/pi
-! note BEAD routine uses x0 but not theta
+      
 
-       
-      call BEAD_parameters(Wkx0,Polaris,epsTW,epsCAV,ZR,XM,kappin,kappnano,GAMMAM)
-! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  call EQUIL_PAR(thet,Det2pi,Wkx0,Polaris,epsTW,epsCAV,XM,ZR,kappnano,kappin,GammaM,OMX,OMY,OMZ,GMAT,PHON)
-    write(12,120)thet,(abs(Gmat(ii)),ii=1,6)
+! artificial parameters
+      Det2pi=-3.d0
+      kappa=4.5d0
+      OMX=6.d0
+      GammaM=2.5d0/2.
+      GX=0.25d0
+! thermal bath occupancy
+      AVNX=10.d0/OMX
 
-!-----------------------------------------------------
-     GX=GMAT(1)
-120 Format(7E14.6)
-     Ed=0.5d0*Polaris*epsTW*epsCAV*sin(thet)
-
-      kappa=(kappnano+kappin)
       kapp2=kappa*0.5d0
       write(6,*)'kappa in main',kappa/2/pi,kapp2/2/pi
-     write(6,*)'GammaM=',GammaM
-     write(6,*)'OMX in Hz=',OMX/pi2! thermal bath occupancy
-      AVNX=BOLTZ*TBATH/hbar/OMX
-     
+
 ! shot noise
       AVPHOT=0.d0
+
+!***********************************
+!  estimate X phonons using optomechanical cooling formula
+! for comparison
+  
+!**********************************
+
+       C1=GX**2*kappa
+       C2=DET2pi
+       C3=(C2+omX)**2+kapp2**2
+       C3=1.d0/C3
+       C4=(C2-omx)**2+kapp2**2
+       C4=1.d0/C4
+        COOLx=-C1*(C3-C4)
+      PHONX=AVNX*2*GAMMAM/(abs(COOLx)+2.*GammaM)
+
+
 !***************************************************************
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-! open loop over frequency for noise spectra eg S_xx(\omega)=FT(autocorrelation <X(t)X^T(t+tau)>)
+! open loop over frequency sweep for noise spectra eg S_xx(\omega)=FT(autocorrelation <X(t)X^T(t+tau)>)
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
             XMAX=2*OMX*1.001
             DEL=XMAX/NPTS
              SXXQM=0.d0
@@ -104,23 +107,28 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
 ! symmetrised 
        XXQMs =0.d0
       
-! ! work out  for negative frequency for symmetrisation
-     
+! ! work out PSDs for negative frequency for symmetrisation of homodyne (not important for S_xx)
     CALL ANALYT(GX,AVNX,AVPHOT,THEhom,DET2pi,Kapp2,GAMMAM,OMX,-OMsweep,XXQM,SHOM1,SHET1)
 
-! update homodyne and symm disp.
+! update homodyne 
       AHOM1=AHOM1+SHOM1
 
-! work out same for positive and symmetrise homodyne
+! work out same PSDs for positive and symmetrise homodyne
     CALL ANALYT(GX,AVNX,AVPHOT,THEhom,DET2pi,Kapp2,GAMMAM,OMX,OMsweep,XXQM,SHOM1,SHET1)
-! update
+! update homodyne
        AHOM1=0.5*(AHOM1+SHOM1)
-      XXQMs=XXQMs+XXQM
+! update S_xx only need normal positive frequency result
+       XXQMs=XXQMs+XXQM
     
-
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+!  PRINT omega, S_xx(omega)
 
    write(8,101)OMsweep/2/pi,XXQMs
- write(10,101)OMsweep/2/pi,SHET1,AHom1
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+! Print omega, S_aa(omega), S_hom where S_hom is homodyne output
+     write(10,101)OMsweep/2/pi,SHET1,AHom1
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 101   format(7D14.6)
              SXXQM(mm)=XXQM
              
@@ -129,25 +137,24 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
               SHOM(mm)=AHOM1
 11            enddo
 
-AVRE=(omx+Det2pi)**2+kapp2**2
-AVRE=AVRE/4/omx/(-det2pi)
-    
-write(6,*)'X: back action limited phonons',AVRE
-  
+!-------------------------------------------
+! back action limit- at zero pressure the residual phonon number from optical noise
+        AVRE=(omx+Det2pi)**2+kapp2**2
+       AVRE=AVRE/4/omx/(-det2pi)    
+       write(6,*)'X: back action limited phonons',AVRE
+!------------------------------------------------  
   
 ! integrate and normalise the quantum  noise spectra
 
       CALL NORM1(NPTS,OMX,TBATH,GAMMAM,TEMPX,SXXQM,OMSTOR,AVRE)
 ! Area AVRE corresponds to 2n+1 so convert to get n
-                PHONONS=PHON(1)
+               
      AVRE=0.5d0*(AVRE-1.d0)
      AV(1)=AVRE
-      write(6,*)'X phonons from formula,  from SXX FT'
-      write(6,200)PHONONS,AVRE
+      write(6,*)'X phonons from SXX FT and from opto cooling formula'
+      write(6,200)AVRE,PHONX
 
-     write(14,120)Det2pi/2/pi,AV(1),PHON(1)
-! loop over theta
-10    enddo
+120 format(3D14.6)
 
 !***********************************************************************
 100   FORMAT(I3,3E14.6,1x,2(E14.6))
@@ -235,7 +242,7 @@ write(6,*)'X: back action limited phonons',AVRE
 ! work out heterodyne for positive frequency branch.
 !  Shift frequency by heterodyne beat.
 
-!--------------------------------------------------------------------------
+!---------------------------------------------------------------------------
 ! FOR THIS EXAMPLE JUST QUADRUPLE MECHANICAL FREQUENCY.
        OMA=OMx*4.d0
        OMA=0.d0
@@ -250,7 +257,7 @@ write(6,*)'X: back action limited phonons',AVRE
 
     call Heterodyne(NT,AVNX,AVPHOT,THETA,A1,A1dagg,SHET1)
 !     write(6,*)omhet,SHET1,(SHET1)/ABS(CHIR1)**2/GMAT(1)**2
-     SHET1=(SHET1-1.d0)/ABS(CHISTMOM1)**2/Gav**2/kapp2/2.
+     SHET1=(SHET1-1.d0)/ABS(CHISTMOM1)**2/GX**2/kapp2/2.
  !     SHET1=SHET1-1.d0
 100   format(6D16.8)
       RETURN
