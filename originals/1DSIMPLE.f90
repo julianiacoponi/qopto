@@ -36,7 +36,7 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
 ! read parameter file with input values
   
       DOUBLE PRECISION::PHON(3),AV(3)
-        DOUBLE PRECISION, DIMENSION(NPTS):: SXXQM,OMSTOR,Shom
+        DOUBLE PRECISION, DIMENSION(NPTS):: SXXQM,OMSTOR,Shom,Shet
          DOUBLE COMPLEX::XI,ZOM
 
 !
@@ -46,7 +46,10 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
      OPEN(8,file="FTanX.dat",status="unknown")
      OPEN(10,file="FTanOPT.dat",status="unknown")
     open(14,file="PHONS.dat",status="unknown")
-!
+
+    WRITE(8, *) "omega/2π ", "S_XX"
+    WRITE(10, *) "omega/2π ", "S_heterodyne ", "S_homodyne"
+
    pi=dacos(-1.d0)
    pi2=2.d0*pi
  
@@ -98,6 +101,7 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
              SXXQM=0.d0
    
              SHOM=0.d0
+             SHET=0.d0
              do 11 mm=1,NPTS
              OMsweep=-XMAX+2*(mm-1)*DEL
 ! store frequency for integration
@@ -135,6 +139,7 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
           
 ! to find optimal squeezing
               SHOM(mm)=AHOM1
+              SHET(mm)=SHET1
 11            enddo
 
 !-------------------------------------------
@@ -153,6 +158,9 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
      AV(1)=AVRE
       write(6,*)'X phonons from SXX FT and from opto cooling formula'
       write(6,200)AVRE,PHONX
+
+      CALL NORM1(NPTS,OMX,TBATH,GAMMAM,TEMPX,SHET,OMSTOR,AVRE)
+      write(6,200)AVRE
 
 120 format(3D14.6)
 
@@ -231,8 +239,9 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
 ! work out noise vector for x, a1 and a2
        Call Avect(GX,Gammam,kapp2,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,A1,A1dagg,BAX)
 !     XX= sqrt(0.5) (b+b^dagg) so halve XX
-      XXF=(ABS(BAX(1,1)))**2
-     XXF=XXF+ (AVNX+1)*(ABS(BAX(1,3)))**2+AVNX*(ABS(BAX(1,4)))**2
+      ! TODO: clarify if my correction below is right?
+      XXF=(ABS(BAX(1,2)))**2
+     XXF=XXF+ AVNX*(ABS(BAX(1,3)))**2+(AVNX+1)*(ABS(BAX(1,4)))**2
 
 ! work out homodyne spectra using same vectors
       call Homodyne(NT,AVNX,AVPHOT,THETA,A1,A1dagg,SHOM1)
@@ -497,6 +506,8 @@ do ii=1,NTOT
 !        XPM1(1,ii)=XI*(A1(1,ii)-A1dagg(1,ii))
 !        XTHET1(1,ii)=XPM1(1,ii)*sin(theta)+XAM1(1,ii)*cos(theta)
 XHET1(1,ii)=A1dagg(1,ii)
+! TODO: allow for choice of a or a^dagg here
+! XHET1(1,ii)=A1(1,ii)
 enddo
 SHET1=0.d0
 
