@@ -69,9 +69,9 @@ double precision::XM,GAMMAM,Wkx0,epsTW,epsCAV,ZR,Ed
       THEhom=Thetahom*pi
       write(6,*)'theta/pi', thet/pi
 ! note BEAD routine uses x0 but not theta
-  call BEAD_parameters(Wkx0,Polaris,epsTW,epsCAV,ZR,XM,kappin,kappnano,GAMMAM)
+  CALL BEAD_PARAMETERS(Wkx0,Polaris,epsTW,epsCAV,ZR,XM,kappin,kappnano,GAMMAM)
 ! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  call EQUIL_PAR(thet,Det2pi,Wkx0,Polaris,epsTW,epsCAV,XM,ZR,kappnano,kappin,GammaM,OMX,OMY,OMZ,GMAT,PHON)
+  CALL EQUILIBRIUM_PARAMETERS(thet,Det2pi,Wkx0,Polaris,epsTW,epsCAV,XM,ZR,kappnano,kappin,GammaM,OMX,OMY,OMZ,GMAT,PHON)
     write(12,120)thet,(abs(Gmat(ii)),ii=1,6)
 120 Format(7E14.6)
      Ed=0.5d0*Polaris*epsTW*epsCAV*sin(thet)
@@ -250,11 +250,11 @@ write(6,*)'Y phonons from formula,  from SXX FT'
 ! *******WORK OUT NOISE SPECTRA
 ! First do susceptibilities
                     
-        call SUSCEPT(OMEGA,DET,Kapp2,gammam,OMX,OMY,OMZ,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ)
+        CALL SUSCEPT(OMEGA,DET,Kapp2,gammam,OMX,OMY,OMZ,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ)
 !       G2NORM=G2*G2*(ABS(CHIR2-cos(2*theta)*CHISTMOM2))**2
 
 ! work out noise vector for x, a1 and a2
-       Call Avect(GMAT,Gammam,kapp2,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ,A1,A1dagg,BAX,BAY,BAZ)
+       CALL Avect(GMAT,Gammam,kapp2,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ,A1,A1dagg,BAX,BAY,BAZ)
 !     XX= sqrt(0.5) (b+b^dagg) so halve XX,
 XXF=(ABS(BAX(1,1)))**2
 XXF=XXF+ (AVNX+1)*(ABS(BAX(1,3)))**2+AVNX*(ABS(BAX(1,4)))**2+(AVNY+1)*ABS(BAX(1,5))**2+AVNY*ABS(BAX(1,6))**2
@@ -282,7 +282,7 @@ ZZF=ZZF+ (AVNZ+1)*(ABS(BAZ(1,7)))**2+AVNZ*(ABS(BAZ(1,8)))**2
    XYF=0.5*(XYF+YXF)
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 ! work out homodyne spectra using same vectors
-      call Homodyne(NT,AVNX,AVNY,AVNZ,AVPHOT,THETA,A1,A1dagg,SHOM1)
+      CALL Homodyne(NT,AVNX,AVNY,AVNZ,AVPHOT,THETA,A1,A1dagg,SHOM1)
 ! rescaling of heterodyne for Gx/Gy
      Gav=(GMAT(1)+GMAT(2))/2.
 
@@ -295,12 +295,12 @@ ZZF=ZZF+ (AVNZ+1)*(ABS(BAZ(1,7)))**2+AVNZ*(ABS(BAZ(1,8)))**2
 !-----------------------------------
 ! work out susceptibilities shifted in frequency
 
-        call SUSCEPT(OMhet,DET,Kapp2,gammam,OMX,OMY,OMZ,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ)
+        CALL SUSCEPT(OMhet,DET,Kapp2,gammam,OMX,OMY,OMZ,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ)
 
 ! work out noise vector again
-Call Avect(GMAT,Gammam,kapp2,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ,A1,A1dagg,BAX,BAY,BAZ)
+CALL Avect(GMAT,Gammam,kapp2,CHIR1,CHISTMOM1,CHIMX,CHIMMOMX,CHIMY,CHIMMOMY,CHIMZ,CHIMMOMZ,A1,A1dagg,BAX,BAY,BAZ)
 
-    call Heterodyne(NT,AVNX,AVNY,AVNZ,AVPHOT,THETA,A1,A1dagg,SHET1)
+    CALL Heterodyne(NT,AVNX,AVNY,AVNZ,AVPHOT,THETA,A1,A1dagg,SHET1)
 !     write(6,*)omhet,SHET1,(SHET1)/ABS(CHIR1)**2/GMAT(1)**2
      SHET1=(SHET1-1.d0)/ABS(CHISTMOM1)**2/Gav**2/kapp2/2.
  !     SHET1=SHET1-1.d0
