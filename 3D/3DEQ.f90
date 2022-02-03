@@ -116,9 +116,9 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(thet, Det, Wkx0, Polaris, epsTW, epsCAV, XM, Z
       OmX = Polaris * epsTw**2 / XM / WX**2
       OmY = Polaris * epsTw**2 / XM / Wy**2
       OMz = 0.5d0 * Polaris * epsTw**2 / XM / ZR**2
-      !     OmX = (310d3 * 2 * pi)**2
-      !     Omy = (275d3 * 2 * pi)**2
-      !     Omz = (80d3 * 2 * pi)**2
+      ! OmX = (310d3 * 2 * pi)**2
+      ! Omy = (275d3 * 2 * pi)**2
+      ! Omz = (80d3 * 2 * pi)**2
 
       WRITE(6, *) 'Wkxeq / pi', Wkx0 / pi
       ! READ(20, *) Wkxx0, Wky0, Wkz0, Alpre, Alpim
