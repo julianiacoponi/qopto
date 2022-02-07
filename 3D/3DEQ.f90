@@ -75,7 +75,11 @@ SUBROUTINE BEAD_PARAMETERS(thet, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnan
 END
 
 
-SUBROUTINE EQUILIBRIUM_PARAMETERS(thet, Det, Wkx0, Polaris, epsTW, epsCAV, XM, ZR, kappnano, kappin, GammaM, OMX, OMY, OMZ, GMAT, PHON)
+SUBROUTINE EQUILIBRIUM_PARAMETERS(&
+      thet, Det, Wkx0, Polaris, &
+      epsTW, epsCAV, XM, ZR, &
+      kappnano, kappin, GammaM, &
+      OMX, OMY, OMZ, GMAT, PHON)
       ! """
       ! subroutine below obtains the optomechanical parameters
       ! """

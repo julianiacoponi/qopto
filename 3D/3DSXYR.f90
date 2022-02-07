@@ -67,7 +67,11 @@ DO  10 ix0 = 1, Ndet
         ! note BEAD routine uses x0 but not theta
         CALL BEAD_PARAMETERS(Wkx0, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnano, GAMMAM)
 
-        CALL EQUILIBRIUM_PARAMETERS(thet, Det2pi, Wkx0, Polaris, epsTW, epsCAV, XM, ZR, kappnano, kappin, GammaM, OMX, OMY, OMZ, GMAT, PHON)
+        CALL EQUILIBRIUM_PARAMETERS(&
+                thet, Det2pi, Wkx0, Polaris, &
+                epsTW, epsCAV, XM, ZR, &
+                kappnano, kappin, GammaM, &
+                OMX, OMY, OMZ, GMAT, PHON)
         WRITE(12, 120) thet, (abs(Gmat(ii)), ii = 1, 6)
         120 FORMAT(7E14.6)
 
@@ -109,13 +113,23 @@ DO  10 ix0 = 1, Ndet
                 ZZQMs = 0.d0
                 XYQMs = 0.d0
                 YXQMs = 0.d0! ! work out  for negative frequency for symmetrisation
-                CALL ANALYT(GMAT, AVNX, AVNY, AVNZ, AVPHOT, THEhom, DET2pi, Kapp2, GAMMAM, OMX, OMY, OMZ, -OMsweep, XXQM, YYQM, ZZQM, XYQM, YXQM, SHOM1, SHET1)
+                CALL ANALYT(&
+                        GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
+                        THEhom, DET2pi, Kapp2, GAMMAM, &
+                        OMX, OMY, OMZ, -OMsweep, &
+                        XXQM, YYQM, ZZQM, XYQM, YXQM, &
+                        SHOM1, SHET1)
 
                 ! update homodyne and symm disp.
                 AHOM1 = AHOM1 + SHOM1
 
                 ! work out same for positive and symmetrise homodyne
-                CALL ANALYT(GMAT, AVNX, AVNY, AVNZ, AVPHOT, THEhom, DET2pi, Kapp2, GAMMAM, OMX, OMY, OMZ, OMsweep, XXQM, YYQM, ZZQM, XYQM, YXQM, SHOM1, SHET1)
+                CALL ANALYT(&
+                        GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
+                        THEhom, DET2pi, Kapp2, GAMMAM, &
+                        OMX, OMY, OMZ, OMsweep, &
+                        XXQM, YYQM, ZZQM, XYQM, YXQM, &
+                        SHOM1, SHET1)
                 ! update
                 AHOM1 = 0.5 * (AHOM1 + SHOM1)
                 XXQMs = XXQMs + XXQM
@@ -214,7 +228,12 @@ FUNCTION OPTOCOOL(G1, Det1X, KAPP2, OMEGAM, GAMMAM)
 END
 
 
-SUBROUTINE ANALYT(GMAT, AVNX, AVNY, AVNZ, AVPHOT, THETA, DET, Kapp2, GAMMAM, OMX, OMY, OMZ, OMEGA, XXF, YYF, ZZF, XYF, YXF, SHOM1, SHET1)
+SUBROUTINE ANALYT(&
+        GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
+        THETA, DET, Kapp2, GAMMAM, &
+        OMX, OMY, OMZ, OMEGA, &
+        XXF, YYF, ZZF, XYF, YXF, &
+        SHOM1, SHET1)
         ! """
         !  Generic routine for noise spectra of trap and probe beams
         ! """
@@ -243,32 +262,44 @@ SUBROUTINE ANALYT(GMAT, AVNX, AVNY, AVNZ, AVPHOT, THETA, DET, Kapp2, GAMMAM, OMX
 
         ! WORK OUT NOISE SPECTRA
         ! First do susceptibilities
-        CALL SUSCEPT(OMEGA, DET, Kapp2, gammam, OMX, OMY, OMZ, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
+        CALL SUSCEPT(OMEGA, DET, Kapp2, gammam, &
+                OMX, OMY, OMZ, &
+                CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
+                CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
         ! G2NORM = G2 * G2 * (abs(CHIR2 - cos(2 * theta) * CHISTMOM2))**2
 
         ! work out noise vector for x,  a1 and a2
-        CALL AVECT(GMAT, Gammam, kapp2, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, A1, A1dagg, BAX, BAY, BAZ)
+        CALL AVECT(&
+                GMAT, Gammam, kapp2, &
+                CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
+                CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, &
+                A1, A1dagg, BAX, BAY, BAZ)
         ! XX = sqrt(0.5) (b+b^dagg) so halve XX
-        XXF = (abs(BAX(1, 1)))**2
-        XXF = XXF + (AVNX + 1)*(abs(BAX(1, 3)))**2 + AVNX*(abs(BAX(1, 4)))**2 + (AVNY + 1)*abs(BAX(1, 5))**2 + AVNY*abs(BAX(1, 6))**2
-        XXF = XXF + (AVNZ + 1)*(abs(BAX(1, 7)))**2 + AVNZ*(abs(BAX(1, 8)))**2
+        XXF = abs(BAX(1, 1))**2
+        XXF = XXF + (AVNX + 1) * abs(BAX(1, 3))**2 + AVNX * abs(BAX(1, 4))**2
+        XXF = XXF + (AVNY + 1) * abs(BAX(1, 5))**2 + AVNY * abs(BAX(1, 6))**2
+        XXF = XXF + (AVNZ + 1) * abs(BAX(1, 7))**2 + AVNZ * abs(BAX(1, 8))**2
 
-        YYF = (abs(BAY(1, 1)))**2
-        YYF = YYF + (AVNX + 1)*(abs(BAY(1, 3)))**2 + AVNX*(abs(BAY(1, 4)))**2 + (AVNY + 1)*abs(BAY(1, 5))**2 + AVNY*abs(BAY(1, 6))**2
-        YYF = YYF + (AVNZ + 1)*(abs(BAY(1, 7)))**2 + AVNZ*(abs(BAY(1, 8)))**2
+        YYF = abs(BAY(1, 1))**2
+        YYF = YYF + (AVNX + 1) * abs(BAY(1, 3))**2 + AVNX * abs(BAY(1, 4))**2
+        YYF = YYF + (AVNY + 1) * abs(BAY(1, 5))**2 + AVNY * abs(BAY(1, 6))**2
+        YYF = YYF + (AVNZ + 1) * abs(BAY(1, 7))**2 + AVNZ * abs(BAY(1, 8))**2
 
-        ZZF = (abs(BAZ(1, 1)))**2
-        ZZF = ZZF + (AVNX + 1)*(abs(BAZ(1, 3)))**2 + AVNX*(abs(BAZ(1, 4)))**2 + (AVNY + 1)*abs(BAZ(1, 5))**2 + AVNY*abs(BAZ(1, 6))**2
-        ZZF = ZZF + (AVNZ + 1)*(abs(BAZ(1, 7)))**2 + AVNZ*(abs(BAZ(1, 8)))**2
+        ZZF = abs(BAZ(1, 1))**2
+        ZZF = ZZF + (AVNX + 1) * abs(BAZ(1, 3))**2 + AVNX * abs(BAZ(1, 4))**2
+        ZZF = ZZF + (AVNY + 1) * abs(BAZ(1, 5))**2 + AVNY * abs(BAZ(1, 6))**2
+        ZZF = ZZF + (AVNZ + 1) * abs(BAZ(1, 7))**2 + AVNZ * abs(BAZ(1, 8))**2
 
         ! WORK OUT CROSS SPECTRA PSD S_XY and SYX
         XYF = BAX(1, 1) * conjg(BAY(1, 1))
-        XYF = XYF + (AVNX + 1)*BAX(1, 3)*conjg(BAY(1, 3)) + AVNX*BAX(1, 4) * conjg(BAY(1, 4)) + (AVNY + 1)*BAX(1, 5)*conjg(BAY(1, 5))
-        XYF = XYF + AVNY*BAX(1, 6)*conjg(BAY(1, 6)) + (AVNZ + 1)*BAX(1, 7)*conjg(BAY(1, 7)) + AVNZ*BAX(1, 8)*conjg(BAY(1, 8))
+        XYF = XYF + (AVNX + 1) * BAX(1, 3) * conjg(BAY(1, 3)) + AVNX * BAX(1, 4) * conjg(BAY(1, 4))
+        XYF = XYF + (AVNY + 1) * BAX(1, 5) * conjg(BAY(1, 5)) + AVNY * BAX(1, 6) * conjg(BAY(1, 6))
+        XYF = XYF + (AVNZ + 1) * BAX(1, 7) * conjg(BAY(1, 7)) + AVNZ * BAX(1, 8) * conjg(BAY(1, 8))
 
-        YXF = BAY(1, 1)*conjg(BAX(1, 1))
-        YXF = YXF + (AVNX + 1)*BAY(1, 3)*conjg(BAX(1, 3)) + AVNX*BAY(1, 4)*conjg(BAX(1, 4)) + (AVNY + 1)*BAY(1, 5)*conjg(BAX(1, 5))
-        YXF = YXF + AVNY*BAY(1, 6)*conjg(BAX(1, 6)) + (AVNZ + 1)*BAY(1, 7)*conjg(BAX(1, 7)) + AVNZ*BAY(1, 8)*conjg(BAX(1, 8))
+        YXF = BAY(1, 1) * conjg(BAX(1, 1))
+        YXF = YXF + (AVNX + 1) * BAY(1, 3) * conjg(BAX(1, 3)) + AVNX * BAY(1, 4) * conjg(BAX(1, 4))
+        YXF = YXF + (AVNY + 1) * BAY(1, 5) * conjg(BAX(1, 5)) + AVNY * BAY(1, 6) * conjg(BAX(1, 6))
+        YXF = YXF + (AVNZ + 1) * BAY(1, 7) * conjg(BAX(1, 7)) + AVNZ * BAY(1, 8) * conjg(BAX(1, 8))
 
         XYF = 0.5 * (XYF + YXF)
         ! RXY = A1(1, 1)
@@ -300,10 +331,18 @@ SUBROUTINE ANALYT(GMAT, AVNX, AVNY, AVNZ, AVPHOT, THETA, DET, Kapp2, GAMMAM, OMX
         OMHET = (OMEGA + OMa)
 
         ! work out susceptibilities shifted in frequency
-        CALL SUSCEPT(OMhet, DET, Kapp2, gammam, OMX, OMY, OMZ, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
+        CALL SUSCEPT(&
+                OMhet, DET, Kapp2, gammam, &
+                OMX, OMY, OMZ, &
+                CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
+                CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
 
         ! work out noise vector again
-        CALL AVECT(GMAT, Gammam, kapp2, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, A1, A1dagg, BAX, BAY, BAZ)
+        CALL AVECT(&
+                GMAT, Gammam, kapp2, &
+                CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
+                CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, &
+                A1, A1dagg, BAX, BAY, BAZ)
 
         CALL HETERODYNE(NT, AVNX, AVNY, AVNZ, AVPHOT, THETA, A1, A1dagg, SHET1)
         ! WRITE(6, *) omhet, SHET1, (SHET1) / abs(CHIR1)**2 / GMAT(1)**2
@@ -466,7 +505,7 @@ SUBROUTINE AVECT(GMAT, Gamm, kapp2, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CH
         etaZ = CHIMZ - CHIMMOMZ
 
         ! coeff of X-Y coupling- Combines direct and indirect paths
-        GcoefXY = (GXY + Xi * eta0c * G X * GY)
+        GcoefXY = (GXY + Xi * eta0c * GX * GY)
         GcoefYX = (GXY + Xi * eta0c * GX * GY)
         GcoefXZ = (GZX + Xi * etaMpi2c * GZ * GX)
         GcoefZX = (GZX + Xi * etaPpi2c * GZ * GX)
