@@ -4,8 +4,8 @@ IMPLICIT NONE
 integer::NPERIOD, NTOT
 double precision::R0, rho, EPSR, EPSI0
 double precision::C, hbar, BOLTZ, TEMP, Gravity
-double precision::WK, waist, WX, WY, XL, Finesse, Press
-double precision::PIN1, DET1, DelFSR, Theta0
+double precision::WK, waist_radius, WX, WY, XL, Finesse, air_pressure
+double precision::tweezer_input_power, detuning, DelFSR, Theta0
 double precision::X0, Y0, Z0
 
 ! parameter file with input values
@@ -26,7 +26,7 @@ double precision::pi, pi2
 
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
-detuning = DET1 * pi2
+detuning = detuning * pi2
 
 DO ii = 1, 100
     ! increase x0 in increments of 0.005*lambda
@@ -72,8 +72,8 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     integer::NPERIOD, NTOT
     double precision::R0, rho, EPSR, EPSI0
     double precision::C, hbar, BOLTZ, TEMP, Gravity
-    double precision::WK, waist, WX, WY, XL, Finesse, Press
-    double precision::PIN1, DET1, DelFSR, Theta0
+    double precision::WK, waist_radius, WX, WY, XL, Finesse, air_pressure
+    double precision::tweezer_input_power, detuning, DelFSR, Theta0
     double precision::X0, Y0, Z0
 
     INCLUDE 'CSCAVITY.h'
@@ -92,9 +92,9 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     Rayleigh_range = WX * WY * WK / 2.d0
 
     omega_optical = C * WK
-    VOL = XL * pi * waist**2 / 4.d0
+    VOL = XL * pi * waist_radius**2 / 4.d0
 
-    E_tweezer = 4. * PIN1 / (Wx * Wy * pi * c * EPSI0)
+    E_tweezer = 4. * tweezer_input_power / (Wx * Wy * pi * c * EPSI0)
     E_tweezer = sqrt(E_tweezer)
     E_cavity = hbar * omega_optical/(2. * VOL * Epsi0)
     E_cavity = sqrt(E_cavity)
@@ -107,10 +107,10 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     kappa_nano = 4. * coeff**2 * DelFSR * cos(thet) * cos(thet)
 
     ! take usual expression eg Levitated review by Li Geraci etc
-    ! 1 bar= 10^ 5 pascal; Press is in mbar = 10^ 2 pascal
+    ! 1 bar= 10^ 5 pascal; air_pressure is in mbar = 10^ 2 pascal
     ! gamma=16 P/(pi*v*rho*R)
     ! v=speed of air=500 /s
-    Gamma_M = 1600.* press / pi
+    Gamma_M = 1600.* air_pressure / pi
     Gamma_M = Gamma_M / 500 / rho / R0
     ! Fix of Feb.2016 our Gamma_M => Gamma_M/2!!
     ! gamma/2=8 P/(pi*v*rho*R)
@@ -134,8 +134,8 @@ SUBROUTINE CALCULATE_MECH_FREQUENCIES(&
     integer::NPERIOD, NTOT
     double precision::R0, rho, EPSR, EPSI0
     double precision::C, hbar, BOLTZ, TEMP, Gravity
-    double precision::WK, waist, WX, WY, XL, Finesse, Press
-    double precision::PIN1, DET1, DelFSR, Theta0
+    double precision::WK, waist_radius, WX, WY, XL, Finesse, air_pressure
+    double precision::tweezer_input_power, detuning, DelFSR, Theta0
     double precision::X0, Y0, Z0
 
     INCLUDE 'CSCAVITY.h'

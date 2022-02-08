@@ -28,8 +28,8 @@ PARAMETER(&
     waist_radius=61.d-6, & ! /metres presumably?
     cavity_length=1.223d-2, & ! /metres
     Finesse=2.8d4, &
-
     air_pressure=1.e-6, & ! air pressure /millibars
+
     tweezer_input_power=0.3886d0, & ! /Watts
     detuning=-200.d3, & ! detuning of trap beam i.e. Delta /KHz
     DelFSR=14.d9, & ! DelFSR = 1 FSR (Free Spectral Range) = 14 GHz

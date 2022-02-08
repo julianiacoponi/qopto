@@ -27,18 +27,18 @@
     WK=5.9d6, & ! 2*pi/lambda=k
     WX=1.043d-6, &
     Wy=0.9035d-6, &
-    waist=61.d-6, & ! /metres presumably?
+    waist_radius=61.d-6, & ! /metres presumably?
     XL=1.223d-2, & ! /metres
     Finesse=3.d4, & ! ~ 1/kappa
-    Press=3.e-3, & ! /millibars
+    air_pressure=3.e-3, & ! /millibars
 
-    Pin1=0.44d0, & ! /Watts
-    DET1=-176.d3, & ! detuning of trap beam i.e. Delta /KHz
+    tweezer_input_power=0.44d0, & ! /Watts
+    detuning=-176.d3, & ! detuning of trap beam i.e. Delta /KHz
     DelFSR=14.d9, & ! 1 FSR (Free Spectral Range) = 14 GHz
     theta0=0.25d0,& ! angle between tweezer polarization and cavity axis /pi
 
     ! Equilibrium positions
-    ! node is X0 = 0.25*lambda ,Y0 = waist/sqrt(2)
+    ! node is X0 = 0.25*lambda ,Y0 = waist_radius/sqrt(2)
     Y0=0.0d-6, &
     X0=0.25d0*1.064d-6, &
     Z0=0.d-6)

@@ -12,8 +12,8 @@ integer::ll, kk, mm, it, im, ii, jj, NT, ithet, Nthet, Nx0, ix0, Ndet
 
 integer::N_total, NPERIOD, NPTS
 double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
-double precision::WK, waist, XL, Finesse, Press, WX, WY, DelFSR
-double precision::PIN1, DET1, X0, Y0, Z0, Theta0, Thetahom, Delx0, XX0, Deldet, DET2PIini, test
+double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
+double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0, Thetahom, Delx0, XX0, Deldet, DET2PIini, test
 double precision::Delthet, cavphotn
 ! parameter file with input values
 
@@ -46,7 +46,7 @@ OPEN(14, file="PHONS.dat", status="unknown")
 
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
-DET2PIini = DET1 * pi2
+DET2PIini = detuning * pi2
 TBATH = TEMP
 NT = N_total
 
@@ -201,12 +201,12 @@ STOP
 END
 
 
-FUNCTION OPTOCOOL(G1, Det1X, KAPP2, OMEGAM, GAMMAM)
+FUNCTION OPTOCOOL(G1, detuningX, KAPP2, OMEGAM, GAMMAM)
     ! """
     !  Function to evaluate optomechanical cooling formula
     ! """
     IMPLICIT NONE
-    double precision::G1, Det1X, KAPP2, OMEGAM
+    double precision::G1, detuningX, KAPP2, OMEGAM
     double precision::C1, C2, C3, C4
     double precision::OPTOCOOL, COOL1, COOL2, GAMMAM
     double precision:: hbar, BOLTZ, TBATH
@@ -216,7 +216,7 @@ FUNCTION OPTOCOOL(G1, Det1X, KAPP2, OMEGAM, GAMMAM)
     ! now work out opto cooling expression
     ! Trap beam
     C1 = 2. * KAPP2 * G1 * G1
-    C2 = DET1X
+    C2 = detuningX
 
 
     C3 = (C2 + omegam)**2 + kapp2**2
@@ -380,12 +380,12 @@ SUBROUTINE HOMODYNE(N_total, AVNX, AVNY, AVNZ, AVPHOT, THETA, A1, A1dagg, SHOM1)
 END
 
 
-SUBROUTINE SUSCEPT(OMEGA, DET1x, Kapp2, gamm, OMX, OMY, OMZ, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
+SUBROUTINE SUSCEPT(OMEGA, detuningx, Kapp2, gamm, OMX, OMY, OMZ, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
     ! """
     ! work out susceptibilities for noise spectra
     ! """
     IMPLICIT NONE
-    double precision::DET1X
+    double precision::detuningX
     double precision::gamm, gamm2, Kapp2
     double precision::OMEGA, OMX, OMY, OMZ
     double precision::t1, t2, ANORM, BNORM
@@ -396,14 +396,14 @@ SUBROUTINE SUSCEPT(OMEGA, DET1x, Kapp2, gamm, OMX, OMY, OMZ, CHIR1, CHISTMOM1, C
     ! FIELD1 susceptibilities
 
     ! Chi_R
-    ANORM = KAPP2**2 + (omega + DET1X)**2
+    ANORM = KAPP2**2 + (omega + detuningX)**2
     t1 = kapp2 / ANORM
-    t2 = (omega + DET1X) / ANORM
+    t2 = (omega + detuningX) / ANORM
     CHIR1 = cmplx(t1, t2)
     ! chi_r^*(-omega)
-    ANORM = KAPP2**2 + (-omega + DET1X)**2
+    ANORM = KAPP2**2 + (-omega + detuningX)**2
     t1 = kapp2 / ANORM
-    t2 = (-omega + DET1X) / ANORM
+    t2 = (-omega + detuningX) / ANORM
     CHISTMOM1 = cmplx(t1, -t2)
 
     ! X MECHANICAL susceptibilities

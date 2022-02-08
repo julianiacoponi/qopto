@@ -7,8 +7,8 @@ IMPLICIT NONE
     integer::ii, m, jj
     integer::NPERIOD, NTOT
     double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
-    double precision::WK, waist, XL, Finesse, Press, WX, WY, DelFSR
-    double precision::PIN1, DET1, X0, Y0, Z0, Theta0
+    double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
+    double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
     INCLUDE 'CSCAVITY.h'
     double precision::epsTW, epsCAV, ZR, A, thet
@@ -28,8 +28,7 @@ IMPLICIT NONE
     WRITE(6, 100) Polaris
 
     OMOPT = C * WK
-    ! note waist is waist radius
-    W2 = waist**2
+    W2 = waist_radius**2
 
     ! add a factor of 4 here. Not in GALAX1-5 routines!!!
     VOL = XL * Pi * W2 / 4.d0
@@ -43,7 +42,7 @@ IMPLICIT NONE
     WRITE(6, *) 'kappaIn =  (Hz)'
     WRITE(6, 100) Kappin / 2 / pi
 
-    epsTW = 4.*PIN1 / (Wx * Wy * pi * c * EPSI0)
+    epsTW = 4.*tweezer_input_power / (Wx * Wy * pi * c * EPSI0)
     epsTW = sqrt(epsTW)
     epsCAV = hbar * OMOPT/(2. * VOL * Epsi0)
     epsCAV = sqrt(epsCAV)
@@ -58,10 +57,10 @@ IMPLICIT NONE
     WRITE(6, *) 'ZR = ', ZR
 
     ! take usual expression eg Levitated review by Li Geraci etc
-    ! 1 bar= 10^ 5 pascal; Press is in mbar = 10^ 2 pascal
+    ! 1 bar= 10^ 5 pascal; air_pressure is in mbar = 10^ 2 pascal
     ! gamma=16 P/(pi*v*rho*R)
     ! v=speed of air=500 /s
-    GAMMAM = 1600.* press / pi
+    GAMMAM = 1600.* air_pressure / pi
     GAMMAM = GAMMAM / 500 / RHO / R0
     ! Fix of Feb.2016 our GAMMAM => GAMMAM/2!!
     ! gamma/2=8 P/(pi*v*rho*R)
@@ -88,8 +87,8 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
 
     integer::NPERIOD, NTOT
     double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
-    double precision::WK, waist, XL, Finesse, Press, WX, WY, DelFSR, Det
-    double precision::PIN1, DET1, X0, Y0, Z0, Theta0
+    double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR, Det
+    double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
     INCLUDE 'CSCAVITY.h'
     double precision::GX, GY, Gz, GXY, GZX, GYZ, XZPF, YZPF, ZZPF, thet
@@ -107,7 +106,7 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
 
     iwrite = 6
     PI = dacos(-1.d0)
-    ! Det2pi=Det1*2*pi
+    ! Det2pi=detuning*2*pi
     Det2pi = Det
     kappa = kappnano + kappin
     kapp2 = 0.5d0 * kappa
@@ -240,8 +239,8 @@ SUBROUTINE COOLING_RATES(WKX0, DETUN, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, C
     integer::ii, m, jj, iwrite
     integer::NPERIOD, NTOT
     double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
-    double precision::WK, waist, XL, Finesse, Press, WX, WY, DelFSR
-    double precision::PIN1, DET1, X0, Y0, Z0, Theta0
+    double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
+    double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
     INCLUDE 'CSCAVITY.h'
     double precision::DETUN, GammaM, GX, GY, Gz, OMx, OMy, OMz
