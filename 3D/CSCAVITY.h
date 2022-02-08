@@ -1,6 +1,6 @@
 ! input parameters for UCL- Antonio cavity
 ! NPERIOD = number of periods in prop. (of fastest oscillation: kappa^-1 or om_M)
-! NTOT = number of equations so 8 => 1 optical mode + 3D
+! N_total = number of equations so 8 => 1 optical mode + 3D
 ! R0 = sphere radius
 ! XL = cavity length
 ! Pin1 = input power in Watts tweezer beam
@@ -16,13 +16,16 @@
 ! waist is  waist radius
 
  PARAMETER(&
+ NPERIOD=80000, & ! number of periods in prop. (of fastest oscillation: kappa^-1 or om_M)
+ N_total=4, & ! number of equations so 8=>1 optical mode +3D
+
     NPERIOD=80000, &
-    NTOT=8, &
+    N_total=8, &
 
     ! Vienna cavity bead parameters
     ! PARAMETER(&
     !   NPERIOD=160000, &
-    !   NTOT=8, &
+    !   N_total=8, &
 
     !   R0=71.5d-9, &
     !   rho=2198.d0, &
