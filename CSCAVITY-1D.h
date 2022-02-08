@@ -31,9 +31,9 @@ PARAMETER(&
 
     air_pressure=1.e-6, & ! air pressure /millibars
     tweezer_input_power=0.3886d0, & ! /Watts
-    detuning=-200.d3, & ! detuning of trap beam i.e. Delta? /KHz
+    detuning=-200.d3, & ! detuning of trap beam i.e. Delta /KHz
     DelFSR=14.d9, & ! DelFSR = 1 FSR (Free Spectral Range) = 14 GHz
-    theta0=0.5d0, & ! angle between tweezer polarization and cavity axis. Given as as a FRACTION of pi so pi/4  is theta0=0.25
+    theta0=0.5d0, & ! angle between tweezer polarization and cavity axis /pi
 
     ! Equilibrium positions 
     ! X0=0.125*lambda, &
