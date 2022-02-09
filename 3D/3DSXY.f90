@@ -11,7 +11,7 @@ IMPLICIT NONE
 integer::ll, kk, mm, it, im, ii, jj, NT, ithet, Nthet, Nx0, ix0, Ndet
 
 integer::N_total, NPERIOD, NPTS
-double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
+double precision::R0, RHO, EPSR, EPSI0, C, hbar, kB, TEMP, Gravity
 double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
 double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0, Thetahom, Delx0, XX0, Deldet, DET2PIini, test
 double precision::Delthet, cavphotn
@@ -36,6 +36,13 @@ double precision::GMAT(6)
 double precision::PHON(3), AV(3)
 double precision, DIMENSION(NPTS)::SXXQM, SYYQM, SZZQM, OMSTOR, Shom
 double complex::XI, ZOM, SXYQM, SYXQM, XYQMs, YXQMs, XYQM, YXQM
+
+integer::equation_choice
+
+WRITE(*, *)  "Which equations to use?"
+WRITE(*, *) '1 = Full 3D'
+WRITE(*, *) '2 = Simplified Eq. 18'
+READ(*, *)  equation_choice
 
 ! Here plot optical field amplitudes
 OPEN(8, file="FTanXYZ.dat", status="unknown")
@@ -65,9 +72,9 @@ DO  10 ix0 = 1, Ndet
 
     WRITE(6, *) 'theta/pi', thet/pi
     ! note BEAD routine uses x0 but not theta
-    CALL BEAD_PARAMETERS(Wkx0, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnano, GAMMAM)
+    CALL CALCULATE_BEAD_PARAMETERS(Wkx0, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnano, GAMMAM)
 
-    CALL EQUILIBRIUM_PARAMETERS(&
+    CALL CALCULATE_EQUILIBRIUM_PARAMETERS(&
         thet, Det2pi, Wkx0, Polaris, &
         epsTW, epsCAV, XM, ZR, &
         kappnano, kappin, GammaM, &
@@ -86,9 +93,9 @@ DO  10 ix0 = 1, Ndet
     WRITE(6,*)'photons in cavity', cavphotn
 
     ! thermal bath occupancy
-    AVNX = BOLTZ * TBATH / hbar / OMX
-    AVNY = BOLTZ * TBATH / hbar / OMY
-    AVNZ = BOLTZ * TBATH / hbar / OMZ
+    AVNX = kB * TBATH / hbar / OMX
+    AVNY = kB * TBATH / hbar / OMY
+    AVNZ = kB * TBATH / hbar / OMZ
     ! shot noise
     AVPHOT = 0.d0
 
@@ -114,7 +121,8 @@ DO  10 ix0 = 1, Ndet
         ZZQMs = 0.d0
         XYQMs = 0.d0
         YXQMs = 0.d0! ! work out  for negative frequency for symmetrisation
-        CALL ANALYT(&
+        CALL CALCULATE_SPECTRA(&
+            equation_choice, &
             GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
             THEhom, DET2pi, Kapp2, GAMMAM, &
             OMX, OMY, OMZ, -OMsweep, &
@@ -125,7 +133,8 @@ DO  10 ix0 = 1, Ndet
         AHOM1 = AHOM1 + SHOM1
 
         ! work out same for positive and symmetrise homodyne
-        CALL ANALYT(&
+        CALL CALCULATE_SPECTRA(&
+            equation_choice, &
             GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
             THEhom, DET2pi, Kapp2, GAMMAM, &
             OMX, OMY, OMZ, OMsweep, &
@@ -140,10 +149,19 @@ DO  10 ix0 = 1, Ndet
         XYQMs = XYQMs + XYQM
         YXQMs = YXQMs + YXQM
         omsweep = omsweep / 2 / pi*1.d-3
-        IF ((omsweep.GE.120).AND.(omsweep.LE.170)) THEN
+
+        IF (equation_choice == 1) THEN
+            IF ((omsweep.GE.120).AND.(omsweep.LE.170)) THEN
+                WRITE(8, 101) OMsweep, XXQMs, YYQMs, ZZQMs
+                WRITE(9, 101) OMsweep, XYQMs, YXQMs
+                WRITE(10, 101) OMsweep, SHET1, AHom1
+            END IF
+
+        ELSE IF (equation_choice == 2) THEN
             WRITE(8, 101) OMsweep, XXQMs, YYQMs, ZZQMs
             WRITE(9, 101) OMsweep, XYQMs, YXQMs
             WRITE(10, 101) OMsweep, SHET1, AHom1
+
         END IF
 
         101 FORMAT(7D14.6)
@@ -153,6 +171,9 @@ DO  10 ix0 = 1, Ndet
         ! to find optimal squeezing
         SHOM(mm) = AHOM1
     11 END DO
+
+    WRITE(6, *) 'final XY spectrum value', XYQM
+    WRITE(6, *) 'final YX spectrum value', YXQM
 
     AVRE = (omx + Det2pi)**2 + kapp2**2
     AVRE = AVRE / 4 / omx / (-det2pi)
@@ -166,14 +187,14 @@ DO  10 ix0 = 1, Ndet
     WRITE(6, *) 'Z: back action limited phonons', AVRE
     ! integrate and normalise the quantum  noise spectra.
 
-    CALL NORM1(NPTS, OMX, TBATH, GAMMAM, TEMPX, SXXQM, OMSTOR, AVRE)
+    CALL INTEGRATE_SPECTRUM(NPTS, OMX, TBATH, GAMMAM, TEMPX, SXXQM, OMSTOR, AVRE)
     ! Area AVRE corresponds to 2n+1 so convert to get n
     PHONONS = PHON(1)
     AVRE = 0.5d0 * (AVRE - 1.d0)
     AV(1) = AVRE
     WRITE(6, *) 'X phonons from formula,   from SXX FT'
     WRITE(6, 200) PHONONS, AVRE
-    CALL NORM1(NPTS, OMY, TBATH, GAMMAM, TEMPY, SYYQM, OMSTOR, AVRE)
+    CALL INTEGRATE_SPECTRUM(NPTS, OMY, TBATH, GAMMAM, TEMPY, SYYQM, OMSTOR, AVRE)
     ! Area AVRE corresponds to 2n+1 so convert to get n
     PHONONS = PHON(2)
     AVRE = 0.5d0 * (AVRE - 1.d0)
@@ -182,7 +203,7 @@ DO  10 ix0 = 1, Ndet
     WRITE(6, 200) PHONONS, AVRE
 
     ! PHONONS FOR HETERODYNE!!!!NOT zz!!!!
-    CALL NORM1(NPTS, OMZ, TBATH, GAMMAM, TEMPZ, SZZQM, OMSTOR, AVRE)
+    CALL INTEGRATE_SPECTRUM(NPTS, OMZ, TBATH, GAMMAM, TEMPZ, SZZQM, OMSTOR, AVRE)
     ! Area AVRE corresponds to 2(nx+ny)+2 so DIFFERENT CONVERSION  to get nx+ny
     PHONONS = PHON(3)
     AVRE = 0.5d0 * (AVRE - 2.d0)
@@ -209,8 +230,8 @@ FUNCTION OPTOCOOL(G1, detuningX, KAPP2, OMEGAM, GAMMAM)
     double precision::G1, detuningX, KAPP2, OMEGAM
     double precision::C1, C2, C3, C4
     double precision::OPTOCOOL, COOL1, COOL2, GAMMAM
-    double precision:: hbar, BOLTZ, TBATH
-    PARAMETER(BOLTZ=1.4d-23, hbar=1.05d-34, TBATH=300.0)
+    double precision:: hbar, kB, TBATH
+    PARAMETER(kB=1.4d-23, hbar=1.05d-34, TBATH=300.0)
     COOL1=0.d0
 
     ! now work out opto cooling expression
@@ -231,7 +252,8 @@ FUNCTION OPTOCOOL(G1, detuningX, KAPP2, OMEGAM, GAMMAM)
 END
 
 
-SUBROUTINE ANALYT(&
+SUBROUTINE CALCULATE_SPECTRA(&
+    equation_choice, &
     GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
     THETA, DET, Kapp2, GAMMAM, &
     OMX, OMY, OMZ, OMEGA, &
@@ -241,6 +263,7 @@ SUBROUTINE ANALYT(&
     !  Generic routine for noise spectra of trap and probe beams
     ! """
     IMPLICIT NONE
+    integer::equation_choice
     integer::ii, m, jj, NT
     PARAMETER(NT=8)
     double precision::DET
@@ -251,8 +274,8 @@ SUBROUTINE ANALYT(&
     double precision::AVNX, AVNY, AVNZ, AVPHOT, THETA, Gav
     double precision::GMAT(6)
     double complex::XYF, YXF
-    double complex::CHIR1, CHISTMOM1
-    double complex::CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ
+    double complex::CHIR1, CHISTMOM1, GXY, XMUX, XMUY
+    double complex::CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, RXY, RYX
     double complex::BAX(1, NT), BAY(1, NT), BAZ(1, NT), A1(1, NT), A1dagg(1, NT)
 
 
@@ -265,7 +288,7 @@ SUBROUTINE ANALYT(&
 
     ! WORK OUT NOISE SPECTRA
     ! First do susceptibilities
-    CALL SUSCEPT(&
+    CALL CALCULATE_SUSCEPTIBILITIES(&
         OMEGA, DET, Kapp2, gammam, &
         OMX, OMY, OMZ, &
         CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
@@ -273,7 +296,8 @@ SUBROUTINE ANALYT(&
     ! G2NORM = G2 * G2 * (abs(CHIR2 - cos(2 * theta) * CHISTMOM2))**2
 
     ! work out noise vector for x,  a1 and a2
-    CALL AVECT(&
+    CALL CALCULATE_NOISE_VECTORS(&
+        equation_choice, &
         GMAT, Gammam, kapp2, &
         CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
         CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, &
@@ -307,6 +331,24 @@ SUBROUTINE ANALYT(&
 
     XYF = 0.5 * (XYF + YXF)
 
+    IF (equation_choice == 2) THEN
+        ! RXY = A1(1, 1)
+        ! RYX = A1(1, 2)
+        ! YXF = XXF * real(RYX) + YYF * real(RXY)
+
+        GXY = A1(1, 4)
+        ! imaginary part of mu_x / M_x
+        ! XMUX = -AIMAG(A1(1, 5))
+        ! simplfy above
+        ! XMUX = 1. / (omx - omy)
+        ! imaginary part of mu_x / M_x
+        ! XMUY = -AIMAG(A1(1, 6))
+        ! XMUY = -1. / (omx - omy)
+
+        ! IN THIS VERSION WE WORK OUT Eq. 18,  simplified version of cross-correlation
+        YXF = (XXF - YYF) * GXY / (omy - omx)
+    END IF
+
     ! work out homodyne spectra using same vectors
     CALL HOMODYNE(NT, AVNX, AVNY, AVNZ, AVPHOT, THETA, A1, A1dagg, SHOM1)
     ! rescaling of heterodyne for Gx / Gy
@@ -320,14 +362,15 @@ SUBROUTINE ANALYT(&
     OMHET = (OMEGA + OMa)
 
     ! work out susceptibilities shifted in frequency
-    CALL SUSCEPT(&
+    CALL CALCULATE_SUSCEPTIBILITIES(&
         OMhet, DET, Kapp2, gammam, &
         OMX, OMY, OMZ, &
         CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
         CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
 
     ! work out noise vector again
-    CALL AVECT(&
+    CALL CALCULATE_NOISE_VECTORS(&
+        equation_choice, &
         GMAT, Gammam, kapp2, &
         CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, &
         CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, &
@@ -380,7 +423,10 @@ SUBROUTINE HOMODYNE(N_total, AVNX, AVNY, AVNZ, AVPHOT, THETA, A1, A1dagg, SHOM1)
 END
 
 
-SUBROUTINE SUSCEPT(OMEGA, detuningx, Kapp2, gamm, OMX, OMY, OMZ, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
+SUBROUTINE CALCULATE_SUSCEPTIBILITIES(&
+    OMEGA, detuningx, Kapp2, gamm, &
+    OMX, OMY, OMZ, CHIR1, CHISTMOM1, &
+    CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ)
     ! """
     ! work out susceptibilities for noise spectra
     ! """
@@ -441,11 +487,17 @@ SUBROUTINE SUSCEPT(OMEGA, detuningx, Kapp2, gamm, OMX, OMY, OMZ, CHIR1, CHISTMOM
 END
 
 
-SUBROUTINE AVECT(GMAT, Gamm, kapp2, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, A1, A1dagg, BAX, BAY, BAZ)
+SUBROUTINE CALCULATE_NOISE_VECTORS(&
+    equation_choice, &
+    GMAT, Gamm, kapp2, CHIR1, CHISTMOM1, &
+    CHIMX, CHIMMOMX, CHIMY, CHIMMOMY, CHIMZ, CHIMMOMZ, &
+    A1, A1dagg, &
+    BAX, BAY, BAZ)
     ! """
     ! Work our vectors of X and optical fields but in terms of noise operators
     ! """
     IMPLICIT NONE
+    integer::equation_choice
     integer::ii, m, jj, N_total, NPERIOD
     double precision::ANORM, BNORM
     double precision::t1, t2, Sqrtkapp, Sqrtgamm, Gamm, Gamm2, kapp2
@@ -577,11 +629,22 @@ SUBROUTINE AVECT(GMAT, Gamm, kapp2, CHIR1, CHISTMOM1, CHIMX, CHIMMOMX, CHIMY, CH
     A1(1, 1) = ONE + A1(1, 1)
     A1dagg(1, 2) = ONE + A1dagg(1, 2)
 
+    IF (equation_choice == 2) THEN
+        A1(1, 1) = ONE + A1(1, 1)
+        A1dagg(1, 2) = ONE + A1dagg(1, 2)
+        A1(1, 1) = RXY
+        A1(1, 2) = RYX
+        A1(1, 3) = GcoefXY
+        A1(1, 4) = GcoefYX
+        A1(1, 5) = etax/CMX
+        A1(1, 6) = etay/CMY
+    END IF
+
     RETURN
 END
 
 
-SUBROUTINE NORM1(NP, OMEGAM, TBATH, Gamm, TEMP, SXXW, OMSTOR, XRE)
+SUBROUTINE INTEGRATE_SPECTRUM(NP, OMEGAM, TBATH, Gamm, TEMP, SXXW, OMSTOR, XRE)
     IMPLICIT NONE
     integer::ii, jj, NP
     double precision::omegam
@@ -589,8 +652,8 @@ SUBROUTINE NORM1(NP, OMEGAM, TBATH, Gamm, TEMP, SXXW, OMSTOR, XRE)
     double precision::PI2, XRE, XIM, COOL, gamm, TEM
     double precision::TEMP2, TEMP, C1, C2, DEL
 
-    double precision::TBATH, hbar, BOLTZ
-    PARAMETER(hbar=1.05d-34, BOLTZ=1.4d-23)
+    double precision::TBATH, hbar, kB
+    PARAMETER(hbar=1.05d-34, kB=1.4d-23)
     double precision, DIMENSION(NP)::OMSTOR
     double precision::SXXW(NP)
 
@@ -606,7 +669,7 @@ SUBROUTINE NORM1(NP, OMEGAM, TBATH, Gamm, TEMP, SXXW, OMSTOR, XRE)
         XRE = XRE + TEm
     END DO
     XRE = XRE * DEL / pi2
-    TEMP= XRE * hbar * OMEGAM / BOLTZ
+    TEMP= XRE * hbar * OMEGAM / kB
 
     100 FORMAT(6E14.6)
     RETURN

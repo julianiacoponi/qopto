@@ -1,12 +1,12 @@
-SUBROUTINE BEAD_PARAMETERS(thet, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnano, GAMMAM)
+SUBROUTINE CALCULATE_BEAD_PARAMETERS(thet, Polaris, epsTW, epsCAV, ZR, XM, kappin, kappnano, GAMMAM)
     ! """
     ! subroutine below is provided by user
     ! and calculates  relevant parameters
     ! """
 IMPLICIT NONE 
     integer::ii, m, jj
-    integer::NPERIOD, NTOT
-    double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
+    integer::NPERIOD, N_total
+    double precision::R0, RHO, EPSR, EPSI0, C, hbar, kB, TEMP, Gravity
     double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
     double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
@@ -74,7 +74,7 @@ IMPLICIT NONE
 END
 
 
-SUBROUTINE EQUILIBRIUM_PARAMETERS(&
+SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     thet, Det, Wkx0, Polaris, &
     epsTW, epsCAV, XM, ZR, &
     kappnano, kappin, GammaM, &
@@ -85,8 +85,8 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
     IMPLICIT NONE
     integer::ii, m, jj, NT, iwrite
 
-    integer::NPERIOD, NTOT
-    double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
+    integer::NPERIOD, N_total
+    double precision::R0, RHO, EPSR, EPSI0, C, hbar, kB, TEMP, Gravity
     double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR, Det
     double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
@@ -184,13 +184,13 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
 
     ! calculate cooling rates
     WRITE(iwrite, *) 'COOLING RATES'
-    CALL COOLING_RATES(WKX0, DET2pi, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, COOLy, COOLz, Gammam)
+    CALL CALCULATE_COOLING_RATES(WKX0, DET2pi, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, COOLy, COOLz, Gammam)
 
     WRITE(iwrite, *) 'X optomechanical cooling rate,  mechanical damping, kx0'
     ! we compare phonon damping with Gamma_tot = 2 * Gammam
     WRITE(iwrite, 100) COOLx, 2. * GAMMAM, Wkx0
     WRITE(iwrite, *) 'Number of phonons: at room temp;at equil'
-    C1 = boltz * temp / hbar / omX
+    C1 = kB * temp / hbar / omX
     C2 = 2.d0 * C1 * GAMMAM / (abs(COOLx) + 2. * GammaM)
     WRITE(iwrite, 100) C1, abs(C2)
     PHON(1) = abs(C2)
@@ -202,7 +202,7 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
     ! we compare phonon damping with Gamma_tot = 2 * Gammam
     WRITE(iwrite, 100) COOLy, 2.*GAMMAM, y0
     WRITE(iwrite, *) 'Number of phonons: at room temp;at equil'
-    C1 = boltz * temp / hbar / omy
+    C1 = kB * temp / hbar / omy
     C2 = 2.d0 * C1 * GAMMAM / (abs(COOLy) + 2. * gammam)
     WRITE(iwrite, 100)C1, abs(C2)
     WRITE(iwrite, *) 'Y temperature: at room temp;at equil'
@@ -214,7 +214,7 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
     ! we compare phonon damping with Gamma_tot = 2 * Gammam (gammam is act gamm/2)
     WRITE(iwrite, 100) COOLz, 2. * GAMMAM, z0
     WRITE(iwrite, *) 'Number of phonons: at room temp;at equil'
-    C1 = boltz * temp / hbar / omz
+    C1 = kB * temp / hbar / omz
     C2 = 2.d0 * C1 * GAMMAM / (abs(COOLz) + 2. * gammam)
     WRITE(iwrite, 100) C1, abs(C2)
     WRITE(iwrite, *) 'Z temperature: at room temp;at equil'
@@ -227,7 +227,7 @@ SUBROUTINE EQUILIBRIUM_PARAMETERS(&
 END
 
 
-SUBROUTINE COOLING_RATES(WKX0, DETUN, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, COOLy, COOLz, Gammam)
+SUBROUTINE CALCULATE_COOLING_RATES(WKX0, DETUN, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, COOLy, COOLz, Gammam)
     ! """
     ! subroutine below obtains the optomechanical parameters
     ! Note that DETUN effectively is
@@ -237,8 +237,8 @@ SUBROUTINE COOLING_RATES(WKX0, DETUN, Kappa, GX, GY, GZ, OMx, OMy, OMz, COOLx, C
 
     IMPLICIT NONE
     integer::ii, m, jj, iwrite
-    integer::NPERIOD, NTOT
-    double precision::R0, RHO, EPSR, EPSI0, C, hbar, BOLTZ, TEMP, Gravity
+    integer::NPERIOD, N_total
+    double precision::R0, RHO, EPSR, EPSI0, C, hbar, kB, TEMP, Gravity
     double precision::WK, waist_radius, XL, Finesse, air_pressure, WX, WY, DelFSR
     double precision::tweezer_input_power, detuning, X0, Y0, Z0, Theta0
 
