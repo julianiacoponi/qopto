@@ -37,6 +37,9 @@ double precision::PHON(3), AV(3)
 double precision, DIMENSION(NPTS)::SXXQM, SYYQM, SZZQM, OMSTOR, Shom
 double complex::XI, ZOM, SXYQM, SYXQM, XYQMs, YXQMs, XYQM, YXQM
 
+double precision::prev_XXQMs, prev_YYQMs, prev_ZZQMs, prev_OMsweep
+integer::XX_max_found, YY_max_found, ZZ_max_found
+
 integer::equation_choice
 
 WRITE(*, *)  "Which equations to use?"
@@ -109,6 +112,10 @@ DO  10 ix0 = 1, Ndet
     SYXQM = 0.d0
     SHOM = 0.d0
 
+    XX_max_found = 0
+    YY_max_found = 0
+    ZZ_max_found = 0
+
     DO 11 mm = 1, NPTS
         OMsweep = -XMAX + 2*(mm - 1) * DEL
         ! store frequency for integration
@@ -120,7 +127,8 @@ DO  10 ix0 = 1, Ndet
         YYQMs = 0.d0
         ZZQMs = 0.d0
         XYQMs = 0.d0
-        YXQMs = 0.d0! ! work out  for negative frequency for symmetrisation
+        YXQMs = 0.d0
+        ! work out  for negative frequency for symmetrisation
         CALL CALCULATE_SPECTRA(&
             equation_choice, &
             GMAT, AVNX, AVNY, AVNZ, AVPHOT, &
@@ -150,6 +158,30 @@ DO  10 ix0 = 1, Ndet
         YXQMs = YXQMs + YXQM
         omsweep = omsweep / 2 / pi*1.d-3
 
+        ! apart from for the first loop, check if current PSD value is less than the previous PSD value
+        ! this should detect the first point where the PSD drops
+        ! so the previous loop's omega value is where the peak is
+        IF (mm >= 1) THEN
+            IF ((XX_max_found /= 1).AND.(XXQMs) < prev_XXQMs))) THEN
+                XX_max_found = 1
+                WRITE(6, *) 'first should be less than second?', XXQMs, prev_XXQMs
+                WRITE(6, *) 'omega value when XX value is less than the previous loop`s', OMsweep
+                WRITE(6, *) 'previous omega value, i.e. where the peak is?', prev_OMsweep
+            END IF
+            IF ((YY_max_found /= 1).AND.(YYQMs < prev_YYQMs)) THEN
+                YY_max_found = 1
+                WRITE(6, *) 'first should be less than second?', YYQMs, prev_YYQMs
+                WRITE(6, *) 'omega value when YY value is less than the previous loop`s', OMsweep
+                WRITE(6, *) 'previous omega value, i.e. where the peak is?', prev_OMsweep
+            END IF
+            IF ((ZZ_max_found /= 1).AND.(ZZQMs < prev_ZZQMs)) THEN
+                ZZ_max_found = 1
+                WRITE(6, *) 'first should be less than second?', ZZQMs, prev_ZZQMs
+                WRITE(6, *) 'omega value when ZZ value is less than the previous loop`s', OMsweep
+                WRITE(6, *) 'previous omega value, i.e. where the peak is?', prev_OMsweep
+            END IF
+        END IF
+
         IF (equation_choice == 1) THEN
             IF ((omsweep.GE.120).AND.(omsweep.LE.170)) THEN
                 WRITE(8, 101) OMsweep, XXQMs, YYQMs, ZZQMs
@@ -170,6 +202,13 @@ DO  10 ix0 = 1, Ndet
         SZZQM(mm) = SHET1
         ! to find optimal squeezing
         SHOM(mm) = AHOM1
+
+        ! keep track of calculated value per loop to compare to next loop value, to find maximum
+        prev_XXQMs = XXQMs
+        prev_YYQMs = YYQMs
+        prev_ZZQMs = ZZQMs
+        prev_OMsweep = OMsweep
+
     11 END DO
 
     WRITE(6, *) 'final XY spectrum value', XYQM
@@ -185,7 +224,7 @@ DO  10 ix0 = 1, Ndet
     AVRE = (omz + Det2pi)**2 + kapp2**2
     AVRE = AVRE / 4 / omz / (-det2pi)
     WRITE(6, *) 'Z: back action limited phonons', AVRE
-    ! integrate and normalise the quantum  noise spectra.
+    ! integrate and normalise the quantum noise spectra.
 
     CALL INTEGRATE_SPECTRUM(NPTS, OMX, TBATH, GAMMAM, TEMPX, SXXQM, OMSTOR, AVRE)
     ! Area AVRE corresponds to 2n+1 so convert to get n
