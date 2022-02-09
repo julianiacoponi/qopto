@@ -162,7 +162,7 @@ DO  10 ix0 = 1, Ndet
         ! this should detect the first point where the PSD drops
         ! so the previous loop's omega value is where the peak is
         IF (mm >= 1) THEN
-            IF ((XX_max_found /= 1).AND.(XXQMs) < prev_XXQMs))) THEN
+            IF ((XX_max_found /= 1).AND.(XXQMs < prev_XXQMs)) THEN
                 XX_max_found = 1
                 WRITE(6, *) 'first should be less than second?', XXQMs, prev_XXQMs
                 WRITE(6, *) 'omega value when XX value is less than the previous loop`s', OMsweep
