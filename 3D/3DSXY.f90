@@ -20,7 +20,7 @@ INCLUDE 'CSCAVITY.h'
 
 integer::num_points
 double precision::theta_homodyne_0
-PARAMETER(theta_homodyne_0=0.12d0, num_points=10000)
+PARAMETER(num_points=10000, theta_homodyne_0=0.12d0)
 
 integer::ii, jj, nn
 double precision::pi, pi2
@@ -54,9 +54,9 @@ integer::XX_max_found, YY_max_found, ZZ_max_found
 
 integer::equation_choice
 
-WRITE(*, *)  "Which equations to use?"
-WRITE(*, *) '1 = Full 3D'
-WRITE(*, *) '2 = Simplified Eq. 18'
+WRITE(6, *)  "Which equations to use?"
+WRITE(6, *) '1 = Full 3D'
+WRITE(6, *) '2 = Simplified Eq. 18'
 READ(*, *)  equation_choice
 
 ! e.g. the below is:
@@ -72,23 +72,20 @@ READ(*, *)  equation_choice
 OPEN(1, file="SXX.dat", status="unknown")
 OPEN(2, file="SYY.dat", status="unknown")
 OPEN(3, file="SZZ.dat", status="unknown")
-OPEN(4, file='OPTSRINGXX.dat', status='unknown')
-OPEN(5, file='OPTSRINGYY.dat', status='unknown')
-OPEN(6, file='OPTSRINGZZ.dat', status='unknown')
+! OPEN(4, file='OPTSRINGXX.dat', status='unknown')
+! OPEN(5, file='OPTSRINGYY.dat', status='unknown')
+! OPEN(7, file='OPTSRINGZZ.dat', status='unknown')
 
 OPEN(9, file="FTSXY.dat", status="unknown")
 OPEN(10, file="FTanOPT.dat", status="unknown")
 OPEN(12, file="GCOUPLE.dat", status="unknown")
-OPEN(14, file="PHOONS.dat", status="unknown")
+OPEN(14, file="PHONS.dat", status="unknown")
 
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
 detuning = detuning_Hz * pi2
 
 ! loop over the X0 equilibrium position
-
-! TODO: fix printing to stdout...
-WRITE(*, *) 'huh?'
 
 num_X0_values = 10
 DO ii=1, num_X0_values
@@ -100,7 +97,7 @@ DO ii=1, num_X0_values
     theta = theta_0 * pi
     theta_homodyne = theta_homodyne_0 * pi
 
-    WRITE(*, *) 'theta /π', theta/pi
+    WRITE(6, *) 'theta /π', theta/pi
     ! note BEAD routine uses x0 but not theta
     CALL CALCULATE_BEAD_PARAMETERS(&
         Rayleigh_range, bead_mass, polarisability, &
@@ -122,14 +119,14 @@ DO ii=1, num_X0_values
     ! Ed = Ed / hbar
     cavity_photons = Ed**2 * cos(WKX0)**2 / hbar**2
 
-    WRITE(*, *) 'kappa /Hz', kappa / 2 / pi
-    WRITE(*, *) 'Gamma_M /Hz', Gamma_M / 2 / pi
+    WRITE(6, *) 'kappa /Hz', kappa / 2 / pi
+    WRITE(6, *) 'Gamma_M /Hz', Gamma_M / 2 / pi
 
     half_kappa = kappa * 0.5d0
     half_Gamma_M = Gamma_M * 0.5d0
 
     cavity_photons = cavity_photons / (half_kappa**2 + detuning**2)
-    WRITE(*, *) 'Number of photons in cavity', cavity_photons
+    WRITE(6, *) 'Number of photons in cavity', cavity_photons
 
     ! thermal bath occupancy
     num_phonons_X = kB * bath_temperature / hbar / omega_x
@@ -196,20 +193,20 @@ DO ii=1, num_X0_values
         IF (jj >= 1) THEN
             IF ((XX_max_found /= 1).AND.(S_XX_value < S_prev_XX_value)) THEN
                 XX_max_found = 1
-                WRITE(*, *) 'XX_now < XX_prev?', S_XX_value, S_prev_XX_value
-                WRITE(*, *) 'omega where XX the peak is?', prev_omega
+                WRITE(6, *) 'XX_now < XX_prev?', S_XX_value, S_prev_XX_value
+                WRITE(6, *) 'omega where XX the peak is?', prev_omega
                 omega_at_peak_XX = prev_omega
             END IF
             IF ((YY_max_found /= 1).AND.(S_YY_value < S_prev_YY_value)) THEN
                 YY_max_found = 1
-                WRITE(*, *) 'YY_now < YY_prev ?', S_YY_value, S_prev_YY_value
-                WRITE(*, *) 'omega where YY the peak is?', prev_omega
+                WRITE(6, *) 'YY_now < YY_prev ?', S_YY_value, S_prev_YY_value
+                WRITE(6, *) 'omega where YY the peak is?', prev_omega
                 omega_at_peak_YY = prev_omega
             END IF
             IF ((ZZ_max_found /= 1).AND.(S_ZZ_value < S_prev_ZZ_value)) THEN
                 ZZ_max_found = 1
-                WRITE(*, *) 'ZZ_now < ZZ_prev?', S_ZZ_value, S_prev_ZZ_value
-                WRITE(*, *) 'omega where ZZ the peak is?', prev_omega
+                WRITE(6, *) 'ZZ_now < ZZ_prev?', S_ZZ_value, S_prev_ZZ_value
+                WRITE(6, *) 'omega where ZZ the peak is?', prev_omega
                 omega_at_peak_ZZ = prev_omega
             END IF
         END IF
@@ -248,46 +245,46 @@ DO ii=1, num_X0_values
 
     WRITE(4, 101) lambda_coeff, (omega_at_peak_XX - omega_x)/pi2
     WRITE(5, 101) lambda_coeff, (omega_at_peak_YY - omega_y)/pi2
-    WRITE(6, 101) lambda_coeff, (omega_at_peak_ZZ - omega_z)/pi2
+    WRITE(7, 101) lambda_coeff, (omega_at_peak_ZZ - omega_z)/pi2
 
     num_phonons = (omega_x + detuning)**2 + half_kappa**2
     num_phonons = num_phonons / 4. / omega_x / (-detuning)
-    WRITE(*, *) 'X: back action limited phonons', num_phonons
+    WRITE(6, *) 'X: back action limited phonons', num_phonons
 
     num_phonons = (omega_y + detuning)**2 + half_kappa**2
     num_phonons = num_phonons / 4. / omega_y / (-detuning)
-    WRITE(*, *) 'Y: back action limited phonons', num_phonons
+    WRITE(6, *) 'Y: back action limited phonons', num_phonons
 
     num_phonons = (omega_z + detuning)**2 + half_kappa**2
     num_phonons = num_phonons / 4. / omega_z / (-detuning)
-    WRITE(*, *) 'Z: back action limited phonons', num_phonons
+    WRITE(6, *) 'Z: back action limited phonons', num_phonons
 
     ! integrate and normalise the quantum noise spectra
     CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_XX_array, area_under_spectrum)
     ! Area corresponds to 2n+1 so convert to get n
     cooling_phonons_X = phonons_from_cooling_formula_array(1)
     phonons_array(1) = 0.5d0 * (area_under_spectrum - 1.d0)
-    WRITE(*, *) 'X phonons from: cooling formula, S_XX FT'
-    WRITE(*, 101) cooling_phonons_X, phonons_array(1)
+    WRITE(6, *) 'X phonons from: cooling formula, S_XX FT'
+    WRITE(6, 101) cooling_phonons_X, phonons_array(1)
 
     CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_YY_array, area_under_spectrum)
     cooling_phonons_Y = phonons_from_cooling_formula_array(2)
     phonons_array(2) = 0.5d0 * (area_under_spectrum - 1.d0)
-    WRITE(*, *) 'Y phonons from: cooling formula, S_YY FT'
-    WRITE(*, 101) cooling_phonons_Y, phonons_array(2)
+    WRITE(6, *) 'Y phonons from: cooling formula, S_YY FT'
+    WRITE(6, 101) cooling_phonons_Y, phonons_array(2)
 
     CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_ZZ_array, area_under_spectrum)
     cooling_phonons_Z = phonons_from_cooling_formula_array(3)
     phonons_array(3) = 0.5d0 * (area_under_spectrum - 1.d0)
-    WRITE(*, *) 'Z phonons from: cooling formula, S_ZZ FT'
-    WRITE(*, 101) cooling_phonons_Z, phonons_array(3)
+    WRITE(6, *) 'Z phonons from: cooling formula, S_ZZ FT'
+    WRITE(6, 101) cooling_phonons_Z, phonons_array(3)
 
     CALL INTEGRATE_SPECTRUM(num_points, omega_increment, S_heterodyne_array, area_under_spectrum)
     ! Area num_phonons corresponds to 2(nx+ny)+2 so DIFFERENT CONVERSION  to get nx+ny
     cooling_phonons_Z = phonons_from_cooling_formula_array(3)
     phonons_array(3) = 0.5d0 * (area_under_spectrum - 2.d0)
-    WRITE(*, *) 'Z phonons from: cooling formula, S_heterodyne FT'
-    WRITE(*, 101) cooling_phonons_Z, phonons_array(3)
+    WRITE(6, *) 'Z phonons from: cooling formula, S_heterodyne FT'
+    WRITE(6, 101) cooling_phonons_Z, phonons_array(3)
     
     WRITE(14, 101) &
         detuning, &
@@ -465,7 +462,7 @@ SUBROUTINE CALCULATE_SPECTRA(&
         a_hat_vector, a_dag_vector, &
         S_heterodyne_value)
 
-    ! WRITE(*, *) omega_heterodyne, S_heterodyne_value, (S_heterodyne_value) / abs(chi_C)**2 / G_matrix(1)**2
+    ! WRITE(6, *) omega_heterodyne, S_heterodyne_value, (S_heterodyne_value) / abs(chi_C)**2 / G_matrix(1)**2
     S_heterodyne_value = (S_heterodyne_value - 1.d0) / abs(chi_C_star)**2 / G_average**2 / kappa / 4.
     ! S_heterodyne_value = S_heterodyne_value - 1.d0
 
@@ -898,13 +895,13 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     pi = dacos(-1.d0)
 
     Rayleigh_range = WX * WY * WK / 2.d0
-    WRITE(*, *) 'Rayleigh_range /m = ', Rayleigh_range
+    WRITE(6, *) 'Rayleigh_range /m = ', Rayleigh_range
 
     bead_mass = bead_density * 4.*pi/3. * bead_radius**3
-    WRITE(*, *) 'bead_mass /kg = ', bead_mass
+    WRITE(6, *) 'bead_mass /kg = ', bead_mass
 
     polarisability = 4.* pi * epsilon_R * (epsilon_0 - 1.) / (epsilon_0 + 2.) * bead_radius**3
-    WRITE(*, *) 'bead polarisability / Farad.m^2 = ', polarisability
+    WRITE(6, *) 'bead polarisability / Farad.m^2 = ', polarisability
 
     omega_optical = c * WK
     ! add a factor of 4 here. Not in GALAX1-5 routines!!!
@@ -912,31 +909,31 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
 
     ! Depth of cavity field. Weak and unimportant for CS case
     amplitude = omega_optical * polarisability / 2. / cavity_volume / epsilon_R
-    WRITE(*, *) 'Cavity trap, amplitude/2π (zeroth shift) /Hz = '
-    WRITE(*, *) amplitude / pi / 2.,  amplitude * cos(WK * x0)**2
+    WRITE(6, *) 'Cavity trap, amplitude/2π (zeroth shift) /Hz = '
+    WRITE(6, *) amplitude / pi / 2.,  amplitude * cos(WK * x0)**2
 
     E_tweezer = sqrt(4. * tweezer_input_power / (Wx * Wy * pi * c * epsilon_R))
-    WRITE(*, *) 'E_tweezer /Volts.m^-1 = ', E_tweezer
+    WRITE(6, *) 'E_tweezer /Volts.m^-1 = ', E_tweezer
 
     E_cavity = sqrt(hbar * omega_optical / (2. * cavity_volume * epsilon_0))
-    WRITE(*, *) 'E_cavity /Volts.m^-1 = ', E_cavity
+    WRITE(6, *) 'E_cavity /Volts.m^-1 = ', E_cavity
 
     kappa_in = pi * c / Finesse / cavity_length
-    WRITE(*, *) 'kappa_in /Hz = ', kappa_in / 2 / pi
+    WRITE(6, *) 'kappa_in /Hz = ', kappa_in / 2 / pi
 
     coeff = WK * polarisability / epsilon_R / omega_optical**2 / pi
     kappa_nano = 4.* coeff**2 * DelFSR * cos(WK * x0)**2
-    WRITE(*, *) 'kappa_nano /Hz = ', kappa_nano
+    WRITE(6, *) 'kappa_nano /Hz = ', kappa_nano
 
     kappa = kappa_nano + kappa_in
-    WRITE(*, *) 'Optical damping: kappa /Hz = ', kappa
+    WRITE(6, *) 'Optical damping: kappa /Hz = ', kappa
 
     ! take usual expression e.g. Levitated review by Li Geraci etc
     ! 1 bar = 10^5 pascal; air_pressure /mbar = 10^2 Pascal
     ! Gamma_M = 1600 * air_pressure / (pi * air_speed * bead_density * bead_radius)
     ! air_speed = 500 ms^-1
     Gamma_M = 1600. * air_pressure / pi / 500. / bead_density / bead_radius
-    WRITE(*, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
+    WRITE(6, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
 
     RETURN
 END
@@ -987,7 +984,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     pi = dacos(-1.d0)
     half_kappa = 0.5d0 * kappa
-    WRITE(*, *) 'kappa  /kHz =', kappa / 2 / pi
+    WRITE(6, *) 'kappa  /kHz =', kappa / 2 / pi
 
     ! note that the detunings include zeroth order correction for linearised versions
     ! as a first pass work out frequencies with Wk0 = 0
@@ -997,17 +994,17 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     omega_y = polarisability * E_tweezer**2 / bead_mass / Wy**2
     omega_z = 0.5d0 * polarisability * E_tweezer**2 / bead_mass / Rayleigh_range**2
 
-    WRITE(*, *) 'WKX0 /π = ', WKX0 / pi
+    WRITE(6, *) 'WKX0 /π = ', WKX0 / pi
 
     ! optomechanical drive frequency
-    WRITE(*, *) 'E_tweezer, E_cavity'
-    WRITE(*, 100)  E_tweezer, E_cavity
+    WRITE(6, *) 'E_tweezer, E_cavity'
+    WRITE(6, 100)  E_tweezer, E_cavity
 
     ! Sept 5 we will use negative Edip
     Edip = -0.5d0 * polarisability * E_tweezer * E_cavity * sin(theta)
     Ediph = Edip / hbar
-    WRITE(*, *) 'Edip / 2π / hbar = '
-    WRITE(*, 100) Ediph / 2 / pi
+    WRITE(6, *) 'Edip / 2π / hbar = '
+    WRITE(6, 100) Ediph / 2 / pi
 
     ! photon number in cavity
     ! real part of photon field
@@ -1016,9 +1013,9 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     N_photon = Ediph * Ediph * cos(WKX0) * cos(WKX0)
     N_photon = N_photon / (half_kappa**2 + detuning**2)
-    WRITE(*, *) 'detuning /Hz = ', detuning / 2 / pi
-    WRITE(*, *) 'half_kappa /Hz = ', half_kappa / 2 / pi
-    WRITE(*, *) 'Number of photons in cavity = ', N_photon
+    WRITE(6, *) 'detuning /Hz = ', detuning / 2 / pi
+    WRITE(6, *) 'half_kappa /Hz = ', half_kappa / 2 / pi
+    WRITE(6, *) 'Number of photons in cavity = ', N_photon
 
     ! ADD CS POTENTIAL CORRECTION to frequency squared
     C1 = -Edip / bead_mass * 2. * alpha_real * WK**2 * cos(WKX0)
@@ -1029,9 +1026,9 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     omega_x = sqrt(omega_x)
     omega_y = sqrt(omega_y)
     omega_z = sqrt(omega_z)
-    WRITE(*, *) 'mech freq omega_x /Hz = ', omega_x / 2 / pi
-    WRITE(*, *) 'mech freq omega_y /Hz = ', omega_y / 2 / pi
-    WRITE(*, *) 'mech freq omega_z /Hz = ', omega_z / 2 / pi
+    WRITE(6, *) 'mech freq omega_x /Hz = ', omega_x / 2 / pi
+    WRITE(6, *) 'mech freq omega_y /Hz = ', omega_y / 2 / pi
+    WRITE(6, *) 'mech freq omega_z /Hz = ', omega_z / 2 / pi
 
     ! optomechanical couplings
     X_zpf = sqrt(hbar / (2.d0 * bead_mass * omega_x))
@@ -1041,9 +1038,9 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     GX = Ediph * WK * X_zpf * sin(theta) * sin(WKX0)
     GY = Ediph * WK * Y_zpf * cos(theta) * sin(WKX0)
     GZ = -Ediph * (WK - 1.d0 / Rayleigh_range) * Z_zpf * cos(WKX0)
-    WRITE(*, *) 'GX /Hz', GX / 2 / pi
-    WRITE(*, *) 'GY /Hz', GY / 2 / pi
-    WRITE(*, *) 'GZ /Hz', GZ / 2 / pi
+    WRITE(6, *) 'GX /Hz', GX / 2 / pi
+    WRITE(6, *) 'GY /Hz', GY / 2 / pi
+    WRITE(6, *) 'GZ /Hz', GZ / 2 / pi
 
     GXY = Ediph * WK * X_zpf * WK * Y_zpf * alpha_real * sin(2. * theta) * cos(WKX0)
     GZX = 2.d0 * Ediph * (WK - 1.d0 / Rayleigh_range) * Z_zpf * WK * X_zpf * alpha_imag * sin(WKX0) * sin(theta)
@@ -1060,7 +1057,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     G_matrix(5) = GYZ
     G_matrix(6) = GZX
 
-    WRITE(*, *) 'COOLING RATES'
+    WRITE(6, *) 'COOLING RATES'
     CALL CALCULATE_COOLING_RATES(&
         detuning, kappa, &
         GX, GY, GZ, &
@@ -1068,46 +1065,46 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         cooling_rate_x, cooling_rate_y, cooling_rate_z)
 
     ! X
-    WRITE(*, *) 'cooling_rate_x', cooling_rate_x
-    WRITE(*, *) 'Gamma_M', Gamma_M
-    WRITE(*, *) 'WKX0', WKX0
+    WRITE(6, *) 'cooling_rate_x', cooling_rate_x
+    WRITE(6, *) 'Gamma_M', Gamma_M
+    WRITE(6, *) 'WKX0', WKX0
 
-    WRITE(*, *) 'X phonons: at room bath_temperature; at equilibrium'
+    WRITE(6, *) 'X phonons: at room bath_temperature; at equilibrium'
     C1 = kB * bath_temperature / hbar / omega_x
     C2 = C1 * Gamma_M / (abs(cooling_rate_x) + Gamma_M)
-    WRITE(*, 100) C1, abs(C2)
+    WRITE(6, 100) C1, abs(C2)
     phonons_from_cooling_formula_array(1) = abs(C2)
 
-    WRITE(*, *) 'X temperature: at room bath_temperature; at equilibrium'
-    WRITE(*, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_x))
+    WRITE(6, *) 'X temperature: at room bath_temperature; at equilibrium'
+    WRITE(6, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_x))
 
     ! Y
-    WRITE(*, *) 'cooling_rate_y', cooling_rate_y
-    WRITE(*, *) 'Gamma_M', Gamma_M
-    WRITE(*, *) 'Y0', Y0
+    WRITE(6, *) 'cooling_rate_y', cooling_rate_y
+    WRITE(6, *) 'Gamma_M', Gamma_M
+    WRITE(6, *) 'Y0', Y0
 
-    WRITE(*, *) 'Y phonons: at room bath_temperature; at equilibrium'
+    WRITE(6, *) 'Y phonons: at room bath_temperature; at equilibrium'
     C1 = kB * bath_temperature / hbar / omega_y
     C2 = C1 * Gamma_M / (abs(cooling_rate_y) + Gamma_M)
-    WRITE(*, 100) C1, abs(C2)
+    WRITE(6, 100) C1, abs(C2)
     phonons_from_cooling_formula_array(2) = abs(C2)
 
-    WRITE(*, *) 'Y temperature: at room bath_temperature; at equilibrium'
-    WRITE(*, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_y))
+    WRITE(6, *) 'Y temperature: at room bath_temperature; at equilibrium'
+    WRITE(6, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_y))
 
     ! Z
-    WRITE(*, *) 'cooling_rate_z', cooling_rate_z
-    WRITE(*, *) 'Gamma_M', Gamma_M
-    WRITE(*, *) 'Z0', Z0
+    WRITE(6, *) 'cooling_rate_z', cooling_rate_z
+    WRITE(6, *) 'Gamma_M', Gamma_M
+    WRITE(6, *) 'Z0', Z0
 
-    WRITE(*, *) 'Z phonons: at room bath_temperature; at equilibrium'
+    WRITE(6, *) 'Z phonons: at room bath_temperature; at equilibrium'
     C1 = kB * bath_temperature / hbar / omega_z
     C2 = C1 * Gamma_M / (abs(cooling_rate_z) + Gamma_M)
-    WRITE(*, 100) C1, abs(C2)
+    WRITE(6, 100) C1, abs(C2)
     phonons_from_cooling_formula_array(3) = abs(C2)
 
-    WRITE(*, *) 'Z temperature: at room bath_temperature; at equilibrium'
-    WRITE(*, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_z))
+    WRITE(6, *) 'Z temperature: at room bath_temperature; at equilibrium'
+    WRITE(6, *) bath_temperature, bath_temperature * Gamma_M / (Gamma_M + abs(cooling_rate_z))
 
     100 FORMAT(4D16.8)
 
@@ -1137,9 +1134,9 @@ SUBROUTINE CALCULATE_COOLING_RATES(&
 
     pi = dacos(-1.d0)
     half_kappa = 0.5d0 * kappa
-    WRITE(*, *) 'GX /Hz', GX/2/pi
-    WRITE(*, *) 'GY /Hz', GY/2/pi
-    WRITE(*, *) 'GZ /Hz', GZ/2/pi
+    WRITE(6, *) 'GX /Hz', GX/2/pi
+    WRITE(6, *) 'GY /Hz', GY/2/pi
+    WRITE(6, *) 'GZ /Hz', GZ/2/pi
 
     ! NOTE: here we neglect opto shift
     ! X cooling
