@@ -16,10 +16,10 @@
     bead_radius=60.1d-9, & ! /metres
     bead_density=1850.d0, & ! /kgm^-3 presumably?
 
-    epsilon_R=1.98d0, & ! relative permittivity /dimensionless
-    epsilon_0=8.854d-12, & ! permittivity of free space /Farad.m^-1
+    vacuum_permittivity=8.854d-12, & ! permittivity of free space /Farad.m^-1
+    relative_permittivity=1.98d0, & ! /dimensionless
 
-    c=3.d8, & ! speed of light /ms^-1
+    speed_of_light=3.d8, & ! /ms^-1
     hbar=1.05d-34, & ! Planck's constant /Js^-1
     kB=1.4d-23, & ! Boltzmann's constant /JK^-1
     bath_temperature=300.d0, & ! /K
