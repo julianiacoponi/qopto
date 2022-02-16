@@ -22,7 +22,7 @@
     c=3.d8, & ! speed of light /ms^-1
     hbar=1.05d-34, & ! Planck's constant /Js^-1
     kB=1.4d-23, & ! Boltzmann's constant /JK^-1
-    Temperature=300.d0, & ! /K
+    bath_temperature=300.d0, & ! /K
     Gravity=9.8d0, & ! acceleration due to Earth's gravity /ms^-2
 
     WK=5.9d6, & ! 2*pi/lambda=k

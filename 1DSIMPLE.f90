@@ -7,22 +7,24 @@
 
 
 IMPLICIT NONE
+
 integer::ii
 double precision::pi, pi2
 
-! Mostly unused parameters imported from CSCAVITY-1D.h
-integer::NPERIOD, N_total
-double precision::R0, rho, EPSR, Epsi0
-double precision::c, hbar, kB, TEMP, Gravity
-double precision::WK, WX, WY, waist_radius, cavity_length, Finesse
-double precision::air_pressure, tweezer_input_power, detuning, DelFSR, theta0
+! parameter file with input values (mostly unused here)
+integer::N_period, N_total
+double precision::bead_radius, bead_density
+double precision::epsilon_0, epsilon_R
+double precision::c, hbar, kB, bath_temperature, Gravity
+double precision::WK, WX, WY
+double precision::waist_radius, cavity_length, Finesse, air_pressure
+double precision::tweezer_input_power, detuning_Hz, DelFSR, theta_0
 double precision::X0, Y0, Z0
 INCLUDE 'CSCAVITY-1D.h'
 
 double precision::theta_homodyne
 integer::num_points
 PARAMETER(theta_homodyne=0.d0, num_points=10000)
-
 
 ! Gamma_M = mechanical damping due to gas,  also noise from fluctuation dissipation
 double precision::Delta, kappa, omega_M, half_Gamma_M, g_coupling
@@ -38,7 +40,7 @@ double precision::area_under_S_XX, area_under_S_heterodyne, area_under_S_homodyn
 double precision, DIMENSION(num_points)::S_XX_array, S_heterodyne_array, S_homodyne_array
 
 ! for optomechanical cooling formula
-double precision::TBATH, C_plus, C_minus, x_cooling, x_phonons_from_cooling_formula
+double precision::C_plus, C_minus, x_cooling, x_phonons_from_cooling_formula
 
 ! which expressions to calculate spectra with
 integer::expressions_choice
@@ -66,7 +68,7 @@ READ(*, *)  expressions_choice
 
 
 ! e.g. the below is:
-! '4' = 4 things written to the same line 
+! '4' = 4 things written to the same line
 ! 'ES' = scientific exponential notation (1-9E+power, instead of 0.1-0.9)
 ! '23' = number of positions to be used
 ! '15' = number of digits to the right of the decimal point
@@ -78,8 +80,6 @@ READ(*, *)  expressions_choice
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
 theta_homodyne_pi = theta_homodyne * pi
-TBATH = 300.d0
-
 
 ! input parameters
 IF (parameters_choice == 1) THEN
@@ -91,12 +91,12 @@ IF (parameters_choice == 1) THEN
     omega_M = 128062.66787 * pi2
     half_Gamma_M = 0.324068D-02
     g_coupling = 53061.566105502839 * pi2
-    WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * TBATH)/hbar'
-    WRITE(*, 500) Delta, kappa, omega_M, half_Gamma_M * 2, g_coupling, (kB * TBATH)/hbar
+    WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * bath_temperature)/hbar'
+    WRITE(*, 500) Delta, kappa, omega_M, half_Gamma_M * 2, g_coupling, (kB * bath_temperature)/hbar
 
     ! thermal bath occupancy
-    nbar = (kB * TBATH)/(hbar * omega_M)
-    WRITE(*, *) 'nbar = (kB*TBATH)/(hbar*omega_M) = thermal bath phonon occupancy:'
+    nbar = (kB * bath_temperature)/(hbar * omega_M)
+    WRITE(*, *) 'nbar = (kB*bath_temperature)/(hbar*omega_M) = thermal bath phonon occupancy:'
     WRITE(*, 500) nbar
 
 ! dummy parameters from Mathematica
@@ -110,7 +110,7 @@ ELSE IF (parameters_choice == 2) THEN
     half_Gamma_M = 2.5d0 / 2.
     g_coupling = 0.25d0
     nbar = 10.d0/omega_M
-    WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * TBATH)/hbar'
+    WRITE(*, *) 'Delta, kappa, omega_M, Gamma_M, g_coupling, n = nbar * omega_M = (kB * bath_temperature)/hbar'
     WRITE(*, 305) Delta, kappa, omega_M, half_Gamma_M * 2, g_coupling, nbar * omega_M
 
 END IF
