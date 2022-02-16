@@ -2,19 +2,19 @@
 PARAMETER(&
     NPERIOD=80000, & ! number of periods in prop. (of fastest oscillation: kappa^-1 or om_M)
     N_total=4, & ! number of equations so 8=>1 optical mode +3D
-    R0=71.5d-9, & ! sphere radius /metres
+    bead_radius=71.5d-9, & ! /metres
 
     ! NPERIOD=160000, &
     ! N_total=4, &
-    ! R0=71.5d-9, &
+    ! bead_radius=71.5d-9, &
 
-    rho=2198.d0, & ! sphere density /kgm^-3 presumably?
-    EPSR=2.1d0, &
-    Epsi0=8.854d-12, &
+    bead_density=2198.d0, & ! /kgm^-3 presumably?
+    epsilon_R=2.1d0, & ! relative permittivity /dimensionless
+    epsilon_0=8.854d-12, &  ! permittivity of free space / Farad.m^-1
 
     ! rho=2198.d0, &
-    ! EPSR=1.45d0**2, &
-    ! Epsi0=8.854d-12, &
+    ! epsilon_R=1.45d0**2, &
+    ! epsilon_0=8.854d-12, &
 
     c=3.d8, & ! speed of light /ms^-1
     hbar=1.05d-34, & ! Planck's constant /Js^-1
