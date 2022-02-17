@@ -49,9 +49,8 @@ double precision, DIMENSION(num_omega_samples)::&
     S_homodyne_array, S_heterodyne_array
 
 integer::num_X0_samples
-double precision::X0_sweep, lambda_coeff
+double precision::X0_value, lambda_coeff
 double precision::omega_x_kHz, omega_y_kHz, omega_z_kHz
-
 
 integer::equation_choice
 integer::debug, extra_debug, bead_debug, equilibrium_debug
@@ -60,6 +59,14 @@ WRITE(6, *)  "Which equations to use?"
 WRITE(6, *) '1 = Full 3D'
 WRITE(6, *) '2 = Simplified Eq. 18'
 READ(*, *)  equation_choice
+
+! FORMAT can be understood from:
+! https://pages.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
+! http://www.personal.psu.edu/jhm/f90/lectures/23.html
+
+! PRINT, OPEN, WRITE, CLOSE can be understood from:
+! https://www.tutorialspoint.com/fortran/fortran_file_input_output.htm
+! https://meteor.geol.iastate.edu/classes/mt227/lectures/Formatting.pdf
 
 ! e.g. the below is:
 ! '4' = 4 things written to the same line
@@ -106,8 +113,8 @@ DO ii=1, num_X0_samples
     ! increase x0 in increments of num_X0_samples segments of half a wavelength (0.5 * lambda)
     ! wavelength = 1064 nanometres
     lambda_coeff = ii * 0.5d0 / num_X0_samples
-    X0_sweep = lambda_coeff * 1.064d-6
-    WKX0 = Wk * X0_sweep
+    X0_value = lambda_coeff * 1.064d-6
+    WKX0 = WK * X0_value
     theta = theta_0 * pi
     theta_homodyne = theta_homodyne_0 * pi
 
@@ -236,6 +243,7 @@ DO ii=1, num_X0_samples
         ! to find optimal squeezing
         S_homodyne_array(jj) = S_homodyne_negative
 
+    ! end of loop over omega samples
     END DO
 
     IF (extra_debug == 1) THEN
@@ -314,7 +322,7 @@ DO ii=1, num_X0_samples
             phonons_from_cooling_formula_array(1), phonons_from_cooling_formula_array(2), phonons_from_cooling_formula_array(3)
     END IF
 
-! loop over x0
+! end of loop over X0 samples
 END DO
 
 STOP
