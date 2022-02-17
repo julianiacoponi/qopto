@@ -42,7 +42,7 @@ double precision::phonons_from_cooling_formula_array(3), phonons_array(3)
 
 ! loop this many samples over omega
 integer::num_omega_samples
-PARAMETER(num_omega_samples=20000)
+PARAMETER(num_omega_samples=100000)
 double precision, DIMENSION(num_omega_samples)::&
     omega_array, &
     S_XX_array, S_YY_array, S_ZZ_array, &
@@ -84,10 +84,10 @@ OPEN(4, file='peaks_XYZ.dat', status='unknown')
 WRITE(4, *) 'X0/lambda ', 'S_XX_peaks ', 'S_YY_peaks ', 'S_ZZ_peaks'
 
 ! NOTE: only record these for the node at X0 = 0.25lambda
-OPEN(9, file="FTSXY.dat", status="unknown")
-OPEN(10, file="FTanOPT.dat", status="unknown")
-OPEN(12, file="GCOUPLE.dat", status="unknown")
-OPEN(14, file="PHONS.dat", status="unknown")
+OPEN(7, file="FTSXY.dat", status="unknown")
+OPEN(8, file="FTanOPT.dat", status="unknown")
+OPEN(9, file="GCOUPLE.dat", status="unknown")
+OPEN(10, file="PHONS.dat", status="unknown")
 
 ! various debug flags :-)
 debug = 1
@@ -131,7 +131,7 @@ DO ii=1, num_X0_samples
 
     ! only write to certain files when at the node of 0.25lambda
     IF (lambda_coeff == 0.25) THEN
-        WRITE(12, 415) theta, (abs(G_matrix(ii)), nn=1, 6)
+        WRITE(9, 503) theta, (abs(G_matrix(ii)), nn=1, 6)
     END IF
 
     half_kappa = kappa * 0.5d0
@@ -217,14 +217,14 @@ DO ii=1, num_X0_samples
             IF (equation_choice == 1) THEN
                 ! IF ((omega_kHz.GE.50).AND.(omega_kHz.LE.200)) THEN
                     WRITE(1, 415) omega_kHz, S_XX_value, S_YY_value, S_ZZ_value
-                    WRITE(9, 415) omega_kHz, S_XY_value, S_YX_value
-                    WRITE(10, 415) omega_kHz, S_heterodyne_value, S_homodyne_value
+                    WRITE(7, 503) omega_kHz, S_XY_value, S_YX_value
+                    WRITE(8, 503) omega_kHz, S_heterodyne_value, S_homodyne_value
                 ! END IF
 
             ELSE IF (equation_choice == 2) THEN
                 WRITE(1, 415) omega_kHz, S_XX_value, S_YY_value, S_ZZ_value
-                WRITE(9, 415) omega_kHz, S_XY_value, S_YX_value
-                WRITE(10, 415) omega_kHz, S_heterodyne_value, S_homodyne_value
+                WRITE(7, 503) omega_kHz, S_XY_value, S_YX_value
+                WRITE(8, 503) omega_kHz, S_heterodyne_value, S_homodyne_value
 
             END IF
         END IF
@@ -308,7 +308,7 @@ DO ii=1, num_X0_samples
     END IF
 
     IF (lambda_coeff == 0.25) THEN
-        WRITE(14, 415) &
+        WRITE(10, 503) &
             detuning, &
             phonons_array(1), phonons_array(2), phonons_array(3), &
             phonons_from_cooling_formula_array(1), phonons_from_cooling_formula_array(2), phonons_from_cooling_formula_array(3)
