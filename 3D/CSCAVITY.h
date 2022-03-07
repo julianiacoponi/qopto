@@ -25,22 +25,25 @@
     bath_temperature=300.d0, & ! /K
     Gravity=9.8d0, & ! acceleration due to Earth's gravity /ms^-2
 
-    WK=5.9d6, & ! 2*pi/lambda=k
-    WX=1.043d-6, &
-    WY=0.9035d-6, &
+    linewidth_k=5.9d6, & ! k = 2π/lambda
+    beam_waist_X=1.043d-6, & ! /metres
+    beam_waist_Y=0.9035d-6, & ! /metres
 
-    waist_radius=61.d-6, & ! /metres
+    cavity_waist=61.d-6, & ! /metres
     cavity_length=1.223d-2, & ! /metres
-    Finesse=3.d4, & ! ~ 1/kappa
+    Finesse=3.d4, & ! ~ 1/kappa /dimensionless
     air_pressure=3.e-3, & ! /millibars
 
     tweezer_input_power=0.44d0, & ! /Watts
-    detuning_Hz=-176.d3, & ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /Hz
     DelFSR=14.d9, & ! 1 FSR (Free Spectral Range) = 14 GHz
-    theta_0=0.25d0,& ! angle between tweezer polarization and cavity axis /pi
+    theta_0=0.25d0, & ! angle between tweezer polarization and cavity axis /pi
+
+    detuning_Hz=-176.d3, & ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /Hz
+    detuning_Hz_Antonio_0_91 = -178.36d3, & ! calculated detuning for Antonio's data 0.91
+    detuning_Hz_Antonio_1_825 = -357.7d3, & ! calculated detuning for Antonio's data 1.825
 
     ! Equilibrium positions
-    ! node is X0 = 0.25*lambda ,Y0 = waist_radius/sqrt(2)
+    ! node is X0 = 0.25*lambda ,Y0 = cavity_waist/sqrt(2)
     X0=0.25d0*1.064d-6, &
     Y0=0.0d-6, &
     Z0=0.d-6)
