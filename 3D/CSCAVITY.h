@@ -13,7 +13,7 @@
     N_period=80000, & ! number of periods in prop. (of fastest oscillation: kappa^-1 or om_M)
     N_total=8, & ! number of equations so 8=>1 optical mode + 3D
 
-    bead_radius=60.1d-9, & ! /metres
+    bead_radius=64.0d-9, & ! /metres
     bead_density=1850.d0, & ! /kgm^-3 presumably?
 
     vacuum_permittivity=8.854d-12, & ! permittivity of free space /Farad.m^-1
@@ -38,9 +38,10 @@
     DelFSR=14.d9, & ! 1 FSR (Free Spectral Range) = 14 GHz
     theta_0=0.25d0, & ! angle between tweezer polarization and cavity axis /pi
 
-    detuning_Hz=-176.d3, & ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /Hz
-    detuning_Hz_Antonio_0_91 = -178.36d3, & ! calculated detuning for Antonio's data 0.91
-    detuning_Hz_Antonio_1_825 = -357.7d3, & ! calculated detuning for Antonio's data 1.825
+    ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /kHz
+    ! NOTE: these use a kappa/2 value of 196kHz (calculated value fromt hese params is 204kHz)
+    detuning_kHz_Antonio_0_91=-178.36, & ! calculated detuning for Antonio's data 0.91 = -detuning/(kappa/2)
+    detuning_kHz_Antonio_1_825=-357.7, & ! calculated detuning for Antonio's data 1.825 = -detuning/(kappa/2)
 
     ! Equilibrium positions
     ! node is X0 = 0.25*lambda ,Y0 = cavity_waist/sqrt(2)

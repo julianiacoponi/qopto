@@ -5,6 +5,8 @@ For the time being, this is just a repository for some Fortran scripts (`.f90` f
 
 These scripts are compiled with [`gfortran`](https://gcc.gnu.org/wiki/GFortranBinaries) and produce, by default, an `a.out` binary executable, which will run the compiled programme.
 
+### 1D Quantum Linear Theory (QLT) for a Coherent Scattering (CS) levitated cavity setup
+
 For example, running the following:
 ```
 gfortran -O2 1DSIMPLE.f90
@@ -49,4 +51,12 @@ And then produce an output like:
    2.68672E-05
 ```
 
-`TODO: add more explanation of what the output of the scripts is?`
+### 3D QLT
+
+In the `3D` folder (originals found in `originals/3D`), a quantum linear theory calculation is done in 3 dimensions, with the x-y axes coupled to the amplitude quadrature of the light, and the z-axis coupled to the phase quadrature.
+
+`3DSXY.f90` investigates the 'optical spring' effect, by seeing how the peaks of the spectra move when changing equilibrium position of the bead in the cavity.
+
+Experimental data for these spectra (at varying equilibrium position) can be found in [this dropbox shared folder](https://www.dropbox.com/scl/fo/g5de9hr7mxubv7q39ga0w/h?dl=0&rlkey=3ni01rvlzt3im7e2fmghj9g09).
+
+`TODO: add full explanation and derivation of QLT, maybe via a PDF of the Mathematica notebooks I've made?`
