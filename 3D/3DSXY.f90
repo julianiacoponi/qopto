@@ -4,37 +4,50 @@
 ! works out position and momentum optical quadrature
 ! Gamma_M = mechanical damping due to gas, also noise from fluctuation dissipation.
 
-
 IMPLICIT NONE
 
 ! parameter file with input values
-integer::N_period, N_total
-double precision::bead_radius, bead_density
-double precision::vacuum_permittivity, relative_permittivity
-double precision::speed_of_light, hbar, kB, bath_temperature, Gravity
-double precision::linewidth_k, beam_waist_X, beam_waist_Y
-double precision::cavity_waist, cavity_length, Finesse, air_pressure
-double precision::tweezer_input_power, DelFSR, theta_0
-double precision::detuning_kHz, detuning_kHz_Antonio_0_91, detuning_kHz_Antonio_1_825
-double precision::X0, Y0, Z0
+integer::N_total
+double precision::hbar, speed_of_light, kB, vacuum_permittivity
+double precision::Free_Spectral_Range, bath_temperature, air_pressure
+double precision::bead_diameter, bead_density, bead_permittivity
+double precision::cavity_waist, cavity_length, Finesse
+double precision::half_kappa_exp_kHz, tweezer_wavelength
 INCLUDE 'CSCAVITY.h'
+
+integer::equation_choice, detuning_choice, use_experimental_positions
+
+! parameters that change per detuning choice
+double precision::tweezer_input_power, theta_tweezer_degrees
+double precision::beam_waist_X, beam_waist_Y
+
+! loop this many samples over omega
+integer::num_X0_samples, num_omega_samples
+PARAMETER(num_omega_samples=50000)
+double precision, DIMENSION(num_omega_samples)::&
+    omega_array, &
+    S_XX_array, S_YY_array, S_ZZ_array, &
+    S_homodyne_array, S_heterodyne_array
 
 integer::ii, jj, nn
 double precision::pi, pi2
+double precision::X0_value, lambda_coeff, node, cancellation_point
+double precision::linewidth_k, theta_tweezer
 double precision::theta_homodyne_0
 double precision::cavity_photons
-double precision::theta
 double precision::G_matrix(6)
 double precision::Rayleigh_range, bead_mass, polarisability
 double precision::E_tweezer, E_cavity
-double precision::detuning, kappa, Gamma_M
+double precision::detuning, detuning_kHz
+double precision::kappa_exp, kappa_calc
+double precision::Gamma_M
 double precision::omega_0_prefactor
 double precision::omega_x_0, omega_y_0, omega_z_0
 double precision::omega_x_CS, omega_y_CS, omega_z_CS
 double precision::omega_x_OPT, omega_y_OPT, omega_z_OPT
+double precision::omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT
 double precision::max_omega, min_omega, omega_increment, omega_value, omega_kHz
 double precision::theta_homodyne
-double precision::half_kappa, half_Gamma_M
 double precision::E_drive
 double precision::S_XX_value, S_YY_value, S_ZZ_value
 double complex::S_XY_value, S_YX_value
@@ -45,41 +58,32 @@ double precision::area_under_spectrum
 double precision::phonons_from_cooling_formula_array(3), phonons_array(3), x_y_phonons
 double precision::X0_experimental_positions(11)
 
-! loop this many samples over omega
-integer::num_X0_samples, num_omega_samples
-PARAMETER(num_omega_samples=50000)
-double precision, DIMENSION(num_omega_samples)::&
-    omega_array, &
-    S_XX_array, S_YY_array, S_ZZ_array, &
-    S_homodyne_array, S_heterodyne_array
-
-double precision::X0_value, lambda_coeff
-
-integer::equation_choice, detuning_choice, use_experimental_positions
-integer::loop_debug, extra_debug, bead_debug, equilibrium_debug
-
 ! integer labels for WRITE for the .dat output files
-integer::spectra_XYZcorr
-integer::omega_QLT_XYZ, omega_CS_XYZ, omega_OPT_XYZ
-integer::deviation_0_XYZ, deviation_CS_XYZ, deviation_OPT_XYZ
+integer::all_spectra
+integer::omega_CS, omega_OPT, omega_CS_plus_OPT, omega_QLT
+integer::deviation_0, deviation_CS, deviation_OPT, deviation_CS_plus_OPT
 integer::cavity_parameters
 integer::stdout
 integer::FTSXY, FTanOPT, GCOUPLE, PHONS
 
 ! various debug flags :-)
+integer::loop_debug, extra_debug, bead_debug, equilibrium_debug, cooling_debug
 loop_debug = 1
 extra_debug = 0
 bead_debug = 1
 equilibrium_debug = 1
+cooling_debug = 0
 
-spectra_XYZcorr = 1
-omega_QLT_XYZ = 21
-omega_CS_XYZ = 22
-omega_OPT_XYZ = 23
+all_spectra = 1
+omega_CS = 21
+omega_OPT = 22
+omega_CS_plus_OPT = 23
+omega_QLT = 24
 
-deviation_0_XYZ = 31 ! omega_0 - omega_QLT
-deviation_CS_XYZ = 32 ! omega_CS - omega_QLT
-deviation_OPT_XYZ = 33 ! omega_OPT - omega_QLT
+deviation_0 = 31 ! omega_0 - omega_QLT
+deviation_CS = 32 ! omega_CS - omega_QLT
+deviation_OPT = 33 ! omega_OPT - omega_QLT
+deviation_CS_plus_OPT = 34 ! omega_CS_plus_OPT - omega_QLT
 
 cavity_parameters = 5
 stdout = 6
@@ -94,12 +98,12 @@ WRITE(stdout, *) '2 = Simplified Eq. 18'
 READ(*, *) equation_choice
 
 WRITE(stdout, *)  "Which detuning to use?"
-WRITE(stdout, *) '1 = from Antonio`s data 0.91 (-178.36kHz)'
-WRITE(stdout, *) '2 = from Antonio`s data 1.825 (-357.7kHz)'
-! NOTE: the above assumes a kappa/2 = 196kHz, whereas the calculated value in this script is 204kHz
+WRITE(stdout, *) '1 = from Antonio`s data 0.91 (small detuning)'
+WRITE(stdout, *) '2 = from Antonio`s data 1.825 (large detuning)'
 READ(*, *) detuning_choice
 
-WRITE(stdout, *)  "Calculate spectra for experimental positions?"
+! TODO: make so that this saves a file for the spectra of each of these positions
+WRITE(stdout, *)  "Calculate spectra for just the experimental positions?"
 WRITE(stdout, *) '1 = Yes'
 WRITE(stdout, *) '2 = No'
 READ(*, *) use_experimental_positions
@@ -121,60 +125,40 @@ READ(*, *) use_experimental_positions
 815 FORMAT(8ES23.15)
 503 FORMAT(5ES11.3)
 
-OPEN(spectra_XYZcorr, file='spectra_XYZcorr.dat', status='unknown')
-WRITE(spectra_XYZcorr, *) 'kHz ', 'S_XX ', 'S_YY ', 'S_ZZ ', 'Re(S_XY) ', 'Im(S_XY) ', 'Re(S_YX) ', 'Im(S_YX)'
+OPEN(all_spectra, file='all_spectra.dat', status='unknown')
+WRITE(all_spectra, *) 'kHz ', 'S_XX ', 'S_YY ', 'S_ZZ ', 'Re(S_XY) ', 'Im(S_XY) ', 'Re(S_YX) ', 'Im(S_YX)'
+
+OPEN(omega_QLT, file='omega_QLT.dat', status='unknown')
+OPEN(omega_CS, file='omega_CS.dat', status='unknown')
+OPEN(omega_OPT, file='omega_OPT.dat', status='unknown')
+OPEN(omega_CS_plus_OPT, file='omega_CS_plus_OPT.dat', status='unknown')
+WRITE(omega_QLT, *) 'X0/lambda ', 'omega_x_QLT ', 'omega_y_QLT ', 'omega_z_QLT'
+WRITE(omega_CS, *) 'X0/lambda ', 'omega_x_CS ', 'omega_y_CS ', 'omega_z_CS'
+WRITE(omega_OPT, *) 'X0/lambda ', 'omega_x_OPT ', 'omega_y_OPT ', 'omega_z_OPT'
+WRITE(omega_CS_plus_OPT, *) 'X0/lambda ', 'omega_x_CS_plus_OPT ', 'omega_y_CS_plus_OPT ', 'omega_z_CS_plus_OPT'
+
+OPEN(deviation_0, file='deviation_0.dat', status='unknown')
+OPEN(deviation_CS, file='deviation_CS.dat', status='unknown')
+OPEN(deviation_OPT, file='deviation_OPT.dat', status='unknown')
+OPEN(deviation_CS_plus_OPT, file='deviation_CS_plus_OPT.dat', status='unknown')
+WRITE(deviation_0, *) 'X0/lambda ', 'deviation_0_X ', 'deviation_0_Y ', 'deviation_0_Z'
+WRITE(deviation_CS, *) 'X0/lambda ', 'deviation_CS_X ', 'deviation_CS_Y ', 'deviation_CS_Z'
+WRITE(deviation_OPT, *) 'X0/lambda ', 'deviation_OPT_X ', 'deviation_OPT_Y ', 'deviation_OPT_Z'
+WRITE(deviation_CS_plus_OPT, *) 'X0/lambda ', 'deviation_CS_plus_OPT_X ', 'deviation_CS_plus_OPT_Y ', 'deviation_CS_plus_OPT_Z'
 
 OPEN(FTSXY, file="FTSXY.dat", status="unknown")
 OPEN(FTanOPT, file="FTanOPT.dat", status="unknown")
 OPEN(GCOUPLE, file="GCOUPLE.dat", status="unknown")
 OPEN(PHONS, file="PHONS.dat", status="unknown")
 
-OPEN(omega_QLT_XYZ, file='omega_QLT_XYZ.dat', status='unknown')
-OPEN(omega_CS_XYZ, file='omega_CS_XYZ.dat', status='unknown')
-OPEN(omega_OPT_XYZ, file='omega_OPT_XYZ.dat', status='unknown')
-WRITE(omega_QLT_XYZ, *) 'X0/lambda ', 'omega_x_QLT ', 'omega_y_QLT ', 'omega_z_QLT'
-WRITE(omega_CS_XYZ, *) 'X0/lambda ', 'omega_x_CS ', 'omega_y_CS ', 'omega_z_CS'
-WRITE(omega_OPT_XYZ, *) 'X0/lambda ', 'omega_x_OPT ', 'omega_y_OPT ', 'omega_z_OPT'
-
-OPEN(deviation_0_XYZ, file='deviation_0_XYZ.dat', status='unknown')
-OPEN(deviation_CS_XYZ, file='deviation_CS_XYZ.dat', status='unknown')
-OPEN(deviation_OPT_XYZ, file='deviation_OPT_XYZ.dat', status='unknown')
-WRITE(deviation_0_XYZ, *) 'X0/lambda ', 'deviation_0_X ', 'deviation_0_Y ', 'deviation_0_Z'
-WRITE(deviation_CS_XYZ, *) 'X0/lambda ', 'deviation_CS_X ', 'deviation_CS_Y ', 'deviation_CS_Z'
-WRITE(deviation_OPT_XYZ, *) 'X0/lambda ', 'deviation_OPT_X ', 'deviation_OPT_Y ', 'deviation_OPT_Z'
-
-OPEN(cavity_parameters, file='cavity_parameters.dat', status='unknown')
-WRITE(cavity_parameters, *) "bead_radius", bead_radius
-WRITE(cavity_parameters, *) "bead_density", bead_density
-WRITE(cavity_parameters, *) "vacuum_permittivity", vacuum_permittivity
-WRITE(cavity_parameters, *) "relative_permittivity", relative_permittivity
-WRITE(cavity_parameters, *) "speed_of_light", speed_of_light
-WRITE(cavity_parameters, *) "hbar", hbar
-WRITE(cavity_parameters, *) "kB", kB
-WRITE(cavity_parameters, *) "Gravity", Gravity
-WRITE(cavity_parameters, *) "linewidth_k", linewidth_k
-WRITE(cavity_parameters, *) "beam_waist_X", beam_waist_X
-WRITE(cavity_parameters, *) "beam_waist_Y", beam_waist_Y
-WRITE(cavity_parameters, *) "cavity_waist", cavity_waist
-WRITE(cavity_parameters, *) "cavity_length", cavity_length
-WRITE(cavity_parameters, *) "Finesse", Finesse
-WRITE(cavity_parameters, *) "air_pressure", air_pressure
-WRITE(cavity_parameters, *) "tweezer_input_power", tweezer_input_power
-WRITE(cavity_parameters, *) "detuning_kHz_Antonio_0_91", detuning_kHz_Antonio_0_91
-WRITE(cavity_parameters, *) "detuning_kHz_Antonio_1_825", detuning_kHz_Antonio_1_825
-WRITE(cavity_parameters, *) "DelFSR", DelFSR
-WRITE(cavity_parameters, *) "theta_0", theta_0
-WRITE(cavity_parameters, *) "X0", X0
-WRITE(cavity_parameters, *) "Y0", Y0
-WRITE(cavity_parameters, *) "Z0", Z0
-WRITE(cavity_parameters, *) "equation_choice", equation_choice
-WRITE(cavity_parameters, *) "detuning_choice", detuning_choice
-
-pi = dacos(-1.d0)
-pi2 = 2.d0 * pi
-
+! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /kHz
 IF (detuning_choice == 1) THEN
-    detuning_kHz = detuning_kHz_Antonio_0_91
+    detuning_kHz = -0.91 * half_kappa_exp_kHz
+    tweezer_input_power = 479.7d-3 ! /Watts
+    beam_waist_X = 1062.7d-9 ! /metres
+    beam_waist_Y = 927.4d-9 ! /metres
+    theta_tweezer_degrees = 55.d0 ! angle between tweezer polarisation and cavity axis
+
     ! taken from position_0.91.csv
     X0_experimental_positions(1) = 0.244100760452371d0
     X0_experimental_positions(2) = 0.235479343072498d0
@@ -187,8 +171,14 @@ IF (detuning_choice == 1) THEN
     X0_experimental_positions(9) = 0.0947904204757179d0
     X0_experimental_positions(10) = 0.0659556029814561d0
     X0_experimental_positions(11) = 0.0065752690208695d0
+
 ELSE IF (detuning_choice == 2) THEN
-    detuning_kHz = detuning_kHz_Antonio_1_825
+    detuning_kHz = -1.825 * half_kappa_exp_kHz
+    tweezer_input_power = 487.d-3 ! /Watts
+    beam_waist_X = 1067.9d-9 ! /metres
+    beam_waist_Y = 927.6d-9 ! /metres
+    theta_tweezer_degrees = 40.5d0
+
     ! taken from position_1.825.csv
     X0_experimental_positions(1) = 0.25d0
     X0_experimental_positions(2) = 0.228734051731891d0
@@ -202,73 +192,113 @@ ELSE IF (detuning_choice == 2) THEN
     X0_experimental_positions(10) = 0.0635852281481869d0
     X0_experimental_positions(11) = 0.00604126074866386d0
 END IF
-WRITE(cavity_parameters, *) "detuning_kHz", detuning_kHz
-WRITE(cavity_parameters, *) "X0_experimental_positions", X0_experimental_positions
+
+pi = dacos(-1.d0)
+pi2 = 2.d0 * pi
+
+kappa_exp = pi2 * 2.d0 * half_kappa_exp_kHz * 1.d3 ! /rads^-1
+detuning = pi2 * detuning_kHz * 1.d3
+linewidth_k = pi2 / tweezer_wavelength
+theta_tweezer_degrees = 45.d0
+theta_tweezer = theta_tweezer_degrees * pi / 180.
 
 ! NOTE: doing num_X0_samples=500 seems to cause a SEGFAULT..
 num_X0_samples = 300
+node = 0.25d0
+cancellation_point = 0.125d0
 
+! TODO: make this work...
 IF (use_experimental_positions == 1) THEN
     num_X0_samples = 11
 END IF
 
-theta = theta_0 * pi
+theta_homodyne_0 = 0.12d0
+theta_homodyne = theta_homodyne_0 * pi
+
 CALL CALCULATE_BEAD_PARAMETERS(&
-    theta, &
+    theta_tweezer, &
+    linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y, &
     Rayleigh_range, bead_mass, polarisability, &
     E_tweezer, E_cavity, E_drive, &
-    kappa, Gamma_M, &
+    ! X0 to calculate (negligible) kappa_bead
+    node * tweezer_wavelength, &
+    ! get value for kappa_calc here
+    kappa_calc, Gamma_M, &
     omega_0_prefactor, &
     omega_x_0, omega_y_0, omega_z_0, &
     bead_debug, stdout)
 
+OPEN(cavity_parameters, file='cavity_parameters.dat', status='unknown')
+WRITE(cavity_parameters, *) "equation_choice", equation_choice
+WRITE(cavity_parameters, *) "detuning_choice", detuning_choice
+WRITE(cavity_parameters, *) "use_experimental_positions", use_experimental_positions
+
+WRITE(cavity_parameters, *) "hbar", hbar
+WRITE(cavity_parameters, *) "speed_of_light", speed_of_light
+WRITE(cavity_parameters, *) "vacuum_permittivity", vacuum_permittivity
+
+WRITE(cavity_parameters, *) "Free_Spectral_Range", Free_Spectral_Range
+
+WRITE(cavity_parameters, *) "bead_diameter", bead_diameter
+WRITE(cavity_parameters, *) "bead_density", bead_density
+WRITE(cavity_parameters, *) "bead_permittivity", bead_permittivity
+
+WRITE(cavity_parameters, *) "cavity_waist", cavity_waist
+WRITE(cavity_parameters, *) "cavity_length", cavity_length
+WRITE(cavity_parameters, *) "Finesse", Finesse
+
+WRITE(cavity_parameters, *) "half_kappa_exp_kHz", half_kappa_exp_kHz
+WRITE(cavity_parameters, *) "tweezer_wavelength", tweezer_wavelength
+
+WRITE(cavity_parameters, *) "detuning_kHz", detuning_kHz
+WRITE(cavity_parameters, *) "X0_experimental_positions", X0_experimental_positions
+WRITE(cavity_parameters, *) "tweezer_input_power", tweezer_input_power
+WRITE(cavity_parameters, *) "beam_waist_X", beam_waist_X
+WRITE(cavity_parameters, *) "beam_waist_Y", beam_waist_Y
+WRITE(cavity_parameters, *) "theta_tweezer_degrees", theta_tweezer_degrees
+
+WRITE(cavity_parameters, *) "half_kappa_calc_kHz", 0.5d0 * kappa_calc / pi2 * 1.d-3
 WRITE(cavity_parameters, *) "omega_x_0", omega_x_0 / pi2 * 1.d-3
 WRITE(cavity_parameters, *) "omega_y_0", omega_y_0 / pi2 * 1.d-3
 WRITE(cavity_parameters, *) "omega_z_0", omega_z_0 / pi2 * 1.d-3
 
-theta_homodyne_0 = 0.12d0
-theta_homodyne = theta_homodyne_0 * pi
-detuning = pi2 * detuning_kHz * 1.d3
-
 ! loop over the X0 equilibrium position
 DO ii=1, num_X0_samples
-    ! increase x0 in increments of num_X0_samples segments of a quarter wavelength (0.25 * lambda)
-    lambda_coeff = ii * 0.25d0 / num_X0_samples
+    ! increase X0 in increments of num_X0_samples segments of a quarter wavelength (0.25 * lambda)
+    lambda_coeff = ii * node / num_X0_samples
 
     IF (use_experimental_positions == 1) THEN
         lambda_coeff = X0_experimental_positions(ii)
     END IF
 
     IF (num_X0_samples == 1) THEN
-        ! if ignoring X0 sampling, just set it to be the node
-        lambda_coeff = 0.25d0
+        ! if ignoring X0 sampling, just set it to be the cancellation point
+        lambda_coeff = cancellation_point
     END IF
 
-    ! wavelength = 1064 nanometres
-    X0_value = lambda_coeff * 1.064d-6
+    X0_value = lambda_coeff * tweezer_wavelength
 
     CALL CALCULATE_EQUILIBRIUM_PARAMETERS(&
-        X0_value, theta, &
+        X0_value, theta_tweezer, linewidth_k, &
         G_matrix, &
         Rayleigh_range, bead_mass, &
         E_drive, &
-        detuning, kappa, Gamma_M, &
+        ! use kappa_exp here, not kappa_calc
+        detuning, kappa_exp, Gamma_M, &
         omega_x_0, omega_y_0, omega_z_0, &
         omega_x_CS, omega_y_CS, omega_z_CS, &
         omega_x_OPT, omega_y_OPT, omega_z_OPT, &
+        omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT, &
         num_phonons_X, num_phonons_Y, num_phonons_Z, &
         phonons_from_cooling_formula_array, &
-        equilibrium_debug, stdout)
+        equilibrium_debug, cooling_debug, stdout)
 
-    ! only write to certain files when at the node of 0.25lambda
-    IF (lambda_coeff == 0.25) THEN
-        WRITE(GCOUPLE, 503) theta, (abs(G_matrix(ii)), nn=1, 6)
+    ! only write to certain files
+    IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
+        WRITE(GCOUPLE, 503) theta_tweezer, (abs(G_matrix(ii)), nn=1, 6)
     END IF
 
-    half_kappa = kappa * 0.5d0
-    half_Gamma_M = Gamma_M * 0.5d0
-
-    cavity_photons = (E_drive / hbar)**2 * cos(linewidth_k * X0_value)**2 / (half_kappa**2 + detuning**2)
+    cavity_photons = (E_drive / hbar)**2 * cos(linewidth_k * X0_value)**2 / ((0.5d0 * kappa_exp)**2 + detuning**2)
     IF (loop_debug == 1) THEN
         WRITE(stdout, *)
         WRITE(stdout, *) '#########################################################################'
@@ -287,8 +317,10 @@ DO ii=1, num_X0_samples
 
     ! expecting peaks at the mechanical frequencies, so sample twice the largest one
     ! omega_y_0 ~ 155kHz for these parameters
-    ! TODO: maybe just go to 200kHz?
-    max_omega = 2.d0 * omega_y_0 * 1.001
+    ! max_omega = 2.d0 * omega_y_0 * 1.001
+
+    ! maybe just go to 200kHz?
+    max_omega = pi2 * 200 * 1.d3
 
     ! either use: postive and negative omega
     min_omega = -max_omega
@@ -315,7 +347,7 @@ DO ii=1, num_X0_samples
             G_matrix, &
             num_photons, &
             num_phonons_X, num_phonons_Y, num_phonons_Z, &
-            detuning, kappa, Gamma_M, &
+            detuning, kappa_exp, Gamma_M, &
             -omega_value, &
             ! OPT corrrection is a dynamical effect which calculating the PSDs via QLT should produce
             ! so just use the CS correction as the input for the QLT PSDs
@@ -336,7 +368,7 @@ DO ii=1, num_X0_samples
             G_matrix, &
             num_photons, &
             num_phonons_X, num_phonons_Y, num_phonons_Z, &
-            detuning, kappa, Gamma_M, &
+            detuning, kappa_exp, Gamma_M, &
             omega_value, &
             omega_x_CS, omega_y_CS, omega_z_CS, &
             S_XX_value, S_YY_value, S_ZZ_value, &
@@ -347,9 +379,9 @@ DO ii=1, num_X0_samples
         S_homodyne_negative = 0.5d0 * (S_homodyne_negative + S_homodyne_value)
         omega_kHz = omega_value / pi2 * 1.d-3
 
-        ! only record the spectra at the node
-        IF (lambda_coeff == 0.25) THEN
-            WRITE(spectra_XYZcorr, 815) &
+        ! only record the spectra at one point
+        IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
+            WRITE(all_spectra, 815) &
                 omega_kHz, S_XX_value, S_YY_value, S_ZZ_value, &
                 real(S_XY_value), aimag(S_XY_value), real(S_YX_value), aimag(S_YX_value)
             WRITE(FTSXY, 503) omega_kHz, S_XY_value, S_YX_value
@@ -380,53 +412,65 @@ DO ii=1, num_X0_samples
             S_ZZ_array(maxloc(S_ZZ_array))
     END IF
 
-    WRITE(omega_QLT_XYZ, 815) &
-        lambda_coeff, &
-        omega_array(maxloc(S_XX_array)) / pi2 * 1.d-3, &
-        omega_array(maxloc(S_YY_array)) / pi2 * 1.d-3, &
-        omega_array(maxloc(S_ZZ_array)) / pi2 * 1.d-3
-
-    WRITE(omega_CS_XYZ, 815) &
+    WRITE(omega_CS, 815) &
         lambda_coeff, &
         omega_x_CS / pi2 * 1.d-3, &
         omega_y_CS / pi2 * 1.d-3, &
         omega_z_CS / pi2 * 1.d-3
 
-    WRITE(omega_OPT_XYZ, 815) &
+    WRITE(omega_OPT, 815) &
         lambda_coeff, &
         omega_x_OPT / pi2 * 1.d-3, &
         omega_y_OPT / pi2 * 1.d-3, &
         omega_z_OPT / pi2 * 1.d-3
 
-    WRITE(deviation_0_XYZ, 815) &
+    WRITE(omega_CS_plus_OPT, 815) &
+        lambda_coeff, &
+        omega_x_CS_plus_OPT / pi2 * 1.d-3, &
+        omega_y_CS_plus_OPT / pi2 * 1.d-3, &
+        omega_z_CS_plus_OPT / pi2 * 1.d-3
+
+    WRITE(omega_QLT, 815) &
+        lambda_coeff, &
+        omega_array(maxloc(S_XX_array)) / pi2 * 1.d-3, &
+        omega_array(maxloc(S_YY_array)) / pi2 * 1.d-3, &
+        omega_array(maxloc(S_ZZ_array)) / pi2 * 1.d-3
+
+    WRITE(deviation_0, 815) &
         lambda_coeff, &
         (omega_x_0 - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
         (omega_y_0 - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
         (omega_z_0 - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
 
-    WRITE(deviation_CS_XYZ, 815) &
+    WRITE(deviation_CS, 815) &
         lambda_coeff, &
         (omega_x_CS - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
         (omega_y_CS - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
         (omega_z_CS - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
 
-    ! NOTE: this should be ~zero, as the PSD peaks should simulate the dynamical effect of the optical spring
-    WRITE(deviation_OPT_XYZ, 815) &
+    WRITE(deviation_OPT, 815) &
         lambda_coeff, &
         (omega_x_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
         (omega_y_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
         (omega_z_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
 
+    ! NOTE: this should be ~zero, as the PSD peaks should simulate the dynamical effect of the optical spring
+    WRITE(deviation_CS_plus_OPT, 815) &
+        lambda_coeff, &
+        (omega_x_CS_plus_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
+        (omega_y_CS_plus_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
+        (omega_z_CS_plus_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
     IF (extra_debug == 1) THEN
-        num_phonons = (omega_x_CS + detuning)**2 + half_kappa**2
+        num_phonons = (omega_x_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
         num_phonons = num_phonons / 4. / omega_x_CS / (-detuning)
         WRITE(stdout, *) 'X: back action limited phonons', num_phonons
 
-        num_phonons = (omega_y_CS + detuning)**2 + half_kappa**2
+        num_phonons = (omega_y_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
         num_phonons = num_phonons / 4. / omega_y_CS / (-detuning)
         WRITE(stdout, *) 'Y: back action limited phonons', num_phonons
 
-        num_phonons = (omega_z_CS + detuning)**2 + half_kappa**2
+        num_phonons = (omega_z_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
         num_phonons = num_phonons / 4. / omega_z_CS / (-detuning)
         WRITE(stdout, *) 'Z: back action limited phonons', num_phonons
 
@@ -455,7 +499,7 @@ DO ii=1, num_X0_samples
         WRITE(stdout, 815) x_y_phonons
     END IF
 
-    IF (lambda_coeff == 0.25) THEN
+    IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
         WRITE(PHONS, 503) &
             detuning, &
             phonons_array(1), phonons_array(2), x_y_phonons, &
@@ -1045,9 +1089,11 @@ END
 
 
 SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
-    theta, &
+    theta_tweezer, &
+    linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y, &
     Rayleigh_range, bead_mass, polarisability, &
     E_tweezer, E_cavity, E_drive, &
+    X0, &
     kappa, Gamma_M, &
     omega_0_prefactor, &
     omega_x_0, omega_y_0, omega_z_0, &
@@ -1058,36 +1104,37 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     ! """
     IMPLICIT NONE
 
-    integer::N_period, N_total
-    double precision::bead_radius, bead_density
-    double precision::vacuum_permittivity, relative_permittivity
-    double precision::speed_of_light, hbar, kB, bath_temperature, Gravity
-    double precision::linewidth_k, beam_waist_X, beam_waist_Y
-    double precision::cavity_waist, cavity_length, Finesse, air_pressure
-    double precision::tweezer_input_power, DelFSR, theta_0
-    double precision::detuning_kHz_Antonio_0_91, detuning_kHz_Antonio_1_825
-    double precision::X0, Y0, Z0
+    integer::N_total
+    double precision::hbar, speed_of_light, kB, vacuum_permittivity
+    double precision::Free_Spectral_Range, bath_temperature, air_pressure
+    double precision::bead_diameter, bead_density, bead_permittivity
+    double precision::cavity_waist, cavity_length, Finesse
+    double precision::half_kappa_exp_kHz, tweezer_wavelength
     INCLUDE 'CSCAVITY.h'
 
-    double precision::theta
+    double precision::theta_tweezer
+    double precision::linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y
     double precision::Rayleigh_range, bead_mass, polarisability
     double precision::E_tweezer, E_cavity, E_drive
+    double precision::X0
     double precision::kappa, Gamma_M
     double precision::omega_0_prefactor
     double precision::omega_x_0, omega_y_0, omega_z_0
     integer::bead_debug, stdout
 
     double precision::pi, pi2
+    double precision::bead_radius
     double precision::omega_optical, coeff, cavity_volume, amplitude
-    double precision::kappa_in, kappa_nano
+    double precision::kappa_in, kappa_bead
 
     ! zero eq. initial values
     pi = dacos(-1.d0)
     pi2 = 2.d0 * pi
+    bead_radius = 0.5d0 * bead_diameter
 
     Rayleigh_range = 0.5d0 * linewidth_k * beam_waist_X * beam_waist_Y
     bead_mass = bead_density * 4.*pi/3. * bead_radius**3
-    polarisability = 4.* pi * vacuum_permittivity * (relative_permittivity - 1.) / (relative_permittivity + 2.) * bead_radius**3
+    polarisability = 4.* pi * vacuum_permittivity * (bead_permittivity - 1.) / (bead_permittivity + 2.) * bead_radius**3
 
     omega_optical = speed_of_light * linewidth_k
     ! add a factor of 4 here. Not in GALAX1-5 routines!!!
@@ -1100,12 +1147,14 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     E_cavity = sqrt(hbar * omega_optical / (2. * cavity_volume * vacuum_permittivity))
     ! use negative E_drive, in units of hbar
     ! electric field of the combined cavity and tweezer light
-    E_drive = -0.5d0 * polarisability * E_tweezer * E_cavity * sin(theta)
+    E_drive = -0.5d0 * polarisability * E_tweezer * E_cavity * sin(theta_tweezer)
 
     kappa_in = pi * speed_of_light / Finesse / cavity_length
     coeff = linewidth_k * polarisability / vacuum_permittivity / omega_optical**2
-    kappa_nano = 4. * coeff**2 * DelFSR * cos(linewidth_k * x0)**2
-    kappa = kappa_in + kappa_nano
+
+    ! this is the only part that depends on X0 and is not in the X0 loop, but it is extremely neglible at ~10^-86
+    kappa_bead = 4. * coeff**2 * Free_Spectral_Range * cos(linewidth_k * X0)**2
+    kappa = kappa_in + kappa_bead
 
     ! take usual expression e.g. Levitated review by Li Geraci etc
     ! 1 bar = 10^5 pascal; air_pressure /mbar = 10^2 Pascal
@@ -1126,14 +1175,14 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
         WRITE(stdout, *) 'bead_mass /kg = ', bead_mass
         WRITE(stdout, *) 'bead polarisability / Farad.m^2 = ', polarisability
         WRITE(stdout, *)
-        WRITE(stdout, *) 'Cavity trap, amplitude/2π (zeroth shift) /Hz = '
-        WRITE(stdout, *) amplitude / pi2,  amplitude * cos(linewidth_k * x0)**2
+        WRITE(stdout, *) 'Cavity trap, amplitude/2π (zeroth shift) - both at node /Hz = '
+        WRITE(stdout, *) amplitude / pi2,  amplitude * cos(linewidth_k * X0)**2
         WRITE(stdout, *)
         WRITE(stdout, *) 'E_tweezer /Volts.m^-1 = ', E_tweezer
         WRITE(stdout, *) 'E_cavity /Volts.m^-1 = ', E_cavity
         WRITE(stdout, *)
         WRITE(stdout, *) 'kappa_in /Hz = ', kappa_in / pi2
-        WRITE(stdout, *) 'kappa_nano /2π*Hz = ', kappa_nano
+        WRITE(stdout, *) 'kappa_bead (at node) /Hz = ', kappa_bead / pi2
         WRITE(stdout, *) 'Optical damping: kappa /Hz = ', kappa / pi2
         WRITE(stdout, *)
         WRITE(stdout, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
@@ -1144,7 +1193,7 @@ END
 
 
 SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
-    X0_value, theta, &
+    X0_value, theta_tweezer, linewidth_k, &
     G_matrix, &
     Rayleigh_range, bead_mass, &
     E_drive, &
@@ -1152,26 +1201,24 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     omega_x_0, omega_y_0, omega_z_0, &
     omega_x_CS, omega_y_CS, omega_z_CS, &
     omega_x_OPT, omega_y_OPT, omega_z_OPT, &
+    omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT, &
     num_phonons_X, num_phonons_Y, num_phonons_Z, &
     phonons_from_cooling_formula_array, &
-    equilibrium_debug, stdout)
+    equilibrium_debug, cooling_debug, stdout)
     ! """
     ! subroutine below obtains the optomechanical parameters
     ! """
     IMPLICIT NONE
 
-    integer::N_period, N_total
-    double precision::bead_radius, bead_density
-    double precision::vacuum_permittivity, relative_permittivity
-    double precision::speed_of_light, hbar, kB, bath_temperature, Gravity
-    double precision::linewidth_k, beam_waist_X, beam_waist_Y
-    double precision::cavity_waist, cavity_length, Finesse, air_pressure
-    double precision::tweezer_input_power, DelFSR, theta_0
-    double precision::detuning_kHz_Antonio_0_91, detuning_kHz_Antonio_1_825
-    double precision::X0, Y0, Z0
+    integer::N_total
+    double precision::hbar, speed_of_light, kB, vacuum_permittivity
+    double precision::Free_Spectral_Range, bath_temperature, air_pressure
+    double precision::bead_diameter, bead_density, bead_permittivity
+    double precision::cavity_waist, cavity_length, Finesse
+    double precision::half_kappa_exp_kHz, tweezer_wavelength
     INCLUDE 'CSCAVITY.h'
 
-    double precision::X0_value, theta
+    double precision::X0_value, theta_tweezer, linewidth_k
     double precision::G_matrix(6)
     double precision::Rayleigh_range, bead_mass
     double precision::E_drive
@@ -1179,10 +1226,11 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     double precision::omega_x_0, omega_y_0, omega_z_0
     double precision::omega_x_CS, omega_y_CS, omega_z_CS
     double precision::omega_x_OPT, omega_y_OPT, omega_z_OPT
+    double precision::omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT
     double precision::num_phonons_X, num_phonons_Y, num_phonons_Z
     ! analytic equilibrium phonon numbers
     double precision::phonons_from_cooling_formula_array(3)
-    integer::equilibrium_debug, stdout
+    integer::equilibrium_debug, cooling_debug, stdout
 
     double precision::pi, pi2
     double precision::kX0, half_kappa
@@ -1213,8 +1261,8 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     ! Coherent scattering correction to frequency squared
     omega_CS_prefactor = -2. * E_drive / bead_mass * photon_field_real * cos(kX0)
-    dx_CS = omega_CS_prefactor * (linewidth_k * sin(theta))**2
-    dy_CS = omega_CS_prefactor * (linewidth_k * cos(theta))**2
+    dx_CS = omega_CS_prefactor * (linewidth_k * sin(theta_tweezer))**2
+    dy_CS = omega_CS_prefactor * (linewidth_k * cos(theta_tweezer))**2
     dz_CS = omega_CS_prefactor * (linewidth_k - 1.d0 / Rayleigh_range)**2
     omega_x_CS = sqrt(omega_x_0**2 + dx_CS)
     omega_y_CS = sqrt(omega_y_0**2 + dy_CS)
@@ -1225,18 +1273,19 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     Y_zpf = sqrt(hbar / (2.d0 * bead_mass * omega_y_CS))
     Z_zpf = sqrt(hbar / (2.d0 * bead_mass * omega_z_CS))
 
+    ! define these variables for shorthand convenience
     k_X_zpf = linewidth_k * X_zpf
     k_Y_zpf = linewidth_k * Y_zpf
     k_Z_zpf = (linewidth_k - 1.d0 / Rayleigh_range) * Z_zpf
 
     ! optomechanical couplings
-    g_xY = (E_drive / hbar) * k_X_zpf * sin(kX0) * sin(theta)
-    g_yY = (E_drive / hbar) * k_Y_zpf * sin(kX0) * cos(theta)
+    g_xY = (E_drive / hbar) * k_X_zpf * sin(kX0) * sin(theta_tweezer)
+    g_yY = (E_drive / hbar) * k_Y_zpf * sin(kX0) * cos(theta_tweezer)
     g_zP = -(E_drive / hbar) * k_Z_zpf * cos(kX0)
 
-    gxy = (E_drive / hbar) * k_X_zpf * k_Y_zpf * photon_field_real * cos(kX0) * sin(2. * theta)
-    gyz = 2.d0 * (E_drive / hbar) * k_Y_zpf * k_Z_zpf * photon_field_imag * sin(kX0) * cos(theta)
-    gzx = 2.d0 * (E_drive / hbar) * k_Z_zpf * k_X_zpf * photon_field_imag * sin(kX0) * sin(theta)
+    gxy = (E_drive / hbar) * k_X_zpf * k_Y_zpf * photon_field_real * cos(kX0) * sin(2. * theta_tweezer)
+    gyz = 2.d0 * (E_drive / hbar) * k_Y_zpf * k_Z_zpf * photon_field_imag * sin(kX0) * cos(theta_tweezer)
+    gzx = 2.d0 * (E_drive / hbar) * k_Z_zpf * k_X_zpf * photon_field_imag * sin(kX0) * sin(theta_tweezer)
 
     ! assign these couplings to an array
     G_matrix(1) = g_xY
@@ -1257,7 +1306,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) 'half_kappa /Hz = ', half_kappa / pi2
         WRITE(stdout, *) 'Number of photons in cavity = ', N_photon
         WRITE(stdout, *)
-        WRITE(stdout, *) 'ORIGINAL (UNCORRECTED) MECHANICAL FREQUENCIES'
+        WRITE(stdout, *) 'MECHANICAL FREQUENCIES IN THE TWEEZER FRAME'
         WRITE(stdout, *) 'omega_x_0 /Hz = ', omega_x_0 / pi2
         WRITE(stdout, *) 'omega_y_0 /Hz = ', omega_y_0 / pi2
         WRITE(stdout, *) 'omega_z_0 /Hz = ', omega_z_0 / pi2
@@ -1293,9 +1342,13 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     suscept_z = (sum_z / (sum_z**2 + half_kappa**2)) - (diff_z / (diff_z**2 + half_kappa**2))
     dz_OPT = 2. * omega_z_CS * g_zP**2 * suscept_z
 
-    omega_x_OPT = sqrt(omega_x_CS**2 + dx_OPT)
-    omega_y_OPT = sqrt(omega_y_CS**2 + dy_OPT)
-    omega_z_OPT = sqrt(omega_z_CS**2 + dz_OPT)
+    omega_x_OPT = sqrt(omega_x_0**2 + dx_OPT)
+    omega_y_OPT = sqrt(omega_y_0**2 + dy_OPT)
+    omega_z_OPT = sqrt(omega_z_0**2 + dz_OPT)
+
+    omega_x_CS_plus_OPT = sqrt(omega_x_0**2 + dx_CS + dx_OPT)
+    omega_y_CS_plus_OPT = sqrt(omega_y_0**2 + dy_CS + dy_OPT)
+    omega_z_CS_plus_OPT = sqrt(omega_z_0**2 + dz_CS + dz_OPT)
 
     IF (equilibrium_debug == 1) THEN
         WRITE(stdout, *)
@@ -1303,6 +1356,13 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) 'omega_x_OPT /Hz = ', omega_x_OPT / pi2
         WRITE(stdout, *) 'omega_y_OPT /Hz = ', omega_y_OPT / pi2
         WRITE(stdout, *) 'omega_z_OPT /Hz = ', omega_z_OPT / pi2
+
+        WRITE(stdout, *)
+        WRITE(stdout, *) 'COHERENT SCATTERING + OPTICAL SPRING CORRECTED'
+        WRITE(stdout, *) 'omega_x_CS_plus_OPT /Hz = ', omega_x_CS_plus_OPT / pi2
+        WRITE(stdout, *) 'omega_y_CS_plus_OPT /Hz = ', omega_y_CS_plus_OPT / pi2
+        WRITE(stdout, *) 'omega_z_CS_plus_OPT /Hz = ', omega_z_CS_plus_OPT / pi2
+
     END IF
 
     CALL CALCULATE_COOLING_RATES(&
@@ -1326,7 +1386,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         phonons_from_cooling_formula_Z = num_phonons_Z * Gamma_M / (abs(cooling_rate_z) + Gamma_M)
         phonons_from_cooling_formula_array(3) = abs(phonons_from_cooling_formula_Z)
 
-    IF (equilibrium_debug == 1) THEN
+    IF (cooling_debug == 1) THEN
         WRITE(stdout, *)
         WRITE(stdout, *) '---------------------------------------------'
         WRITE(stdout, *) 'COOLING RATES'
