@@ -62,6 +62,7 @@ double precision::X0_experimental_positions(11)
 integer::all_spectra
 integer::omega_CS, omega_OPT, omega_CS_plus_OPT, omega_QLT
 integer::deviation_0, deviation_CS, deviation_OPT, deviation_CS_plus_OPT
+integer::OM_couplings, mech_couplings
 integer::cavity_parameters
 integer::stdout
 integer::FTSXY, FTanOPT, GCOUPLE, PHONS
@@ -84,6 +85,9 @@ deviation_0 = 31 ! omega_0 - omega_QLT
 deviation_CS = 32 ! omega_CS - omega_QLT
 deviation_OPT = 33 ! omega_OPT - omega_QLT
 deviation_CS_plus_OPT = 34 ! omega_CS_plus_OPT - omega_QLT
+
+OM_couplings = 41 ! g_xY, g_yY, g_zP
+mech_couplings = 42 ! gxy, gyz, gzx
 
 cavity_parameters = 5
 stdout = 6
@@ -146,6 +150,11 @@ WRITE(deviation_CS, *) 'X0/lambda ', 'deviation_CS_X ', 'deviation_CS_Y ', 'devi
 WRITE(deviation_OPT, *) 'X0/lambda ', 'deviation_OPT_X ', 'deviation_OPT_Y ', 'deviation_OPT_Z'
 WRITE(deviation_CS_plus_OPT, *) 'X0/lambda ', 'deviation_CS_plus_OPT_X ', 'deviation_CS_plus_OPT_Y ', 'deviation_CS_plus_OPT_Z'
 
+OPEN(OM_couplings, file='OM_couplings.dat', status='unknown')
+OPEN(mech_couplings, file='mech_couplings.dat', status='unknown')
+WRITE(OM_couplings, *) 'X0/lambda ', 'g_xY ', 'g_yY ', 'g_zP'
+WRITE(mech_couplings, *) 'X0/lambda ', 'gxy ', 'gyz ', 'gzx'
+
 OPEN(FTSXY, file="FTSXY.dat", status="unknown")
 OPEN(FTanOPT, file="FTanOPT.dat", status="unknown")
 OPEN(GCOUPLE, file="GCOUPLE.dat", status="unknown")
@@ -199,7 +208,6 @@ pi2 = 2.d0 * pi
 kappa_exp = pi2 * 2.d0 * half_kappa_exp_kHz * 1.d3 ! /rads^-1
 detuning = pi2 * detuning_kHz * 1.d3
 linewidth_k = pi2 / tweezer_wavelength
-theta_tweezer_degrees = 45.d0
 theta_tweezer = theta_tweezer_degrees * pi / 180.
 
 ! NOTE: doing num_X0_samples=500 seems to cause a SEGFAULT..
@@ -279,7 +287,8 @@ DO ii=1, num_X0_samples
     X0_value = lambda_coeff * tweezer_wavelength
 
     CALL CALCULATE_EQUILIBRIUM_PARAMETERS(&
-        X0_value, theta_tweezer, linewidth_k, &
+        X0_value, &
+        theta_tweezer, linewidth_k, &
         G_matrix, &
         Rayleigh_range, bead_mass, &
         E_drive, &
@@ -460,6 +469,18 @@ DO ii=1, num_X0_samples
         (omega_x_CS_plus_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
         (omega_y_CS_plus_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
         (omega_z_CS_plus_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
+    WRITE(OM_couplings, 815) &
+        lambda_coeff, &
+        G_matrix(1) / pi2 * 1.d-3, &
+        G_matrix(2) / pi2 * 1.d-3, &
+        G_matrix(3) / pi2 * 1.d-3
+
+    WRITE(mech_couplings, 815) &
+        lambda_coeff, &
+        G_matrix(4) / pi2 * 1.d-3, &
+        G_matrix(5) / pi2 * 1.d-3, &
+        G_matrix(6) / pi2 * 1.d-3
 
     IF (extra_debug == 1) THEN
         num_phonons = (omega_x_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
@@ -1181,9 +1202,9 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
         WRITE(stdout, *) 'E_tweezer /Volts.m^-1 = ', E_tweezer
         WRITE(stdout, *) 'E_cavity /Volts.m^-1 = ', E_cavity
         WRITE(stdout, *)
-        WRITE(stdout, *) 'kappa_in /Hz = ', kappa_in / pi2
-        WRITE(stdout, *) 'kappa_bead (at node) /Hz = ', kappa_bead / pi2
-        WRITE(stdout, *) 'Optical damping: kappa /Hz = ', kappa / pi2
+        WRITE(stdout, *) 'kappa_in /kHz = ', kappa_in / pi2 * 1.d-3
+        WRITE(stdout, *) 'kappa_bead (at node) /kHz = ', kappa_bead / pi2 * 1.d-3
+        WRITE(stdout, *) 'Calculated ptical damping: kappa_calc /kHz = ', kappa / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
     END IF
@@ -1193,7 +1214,8 @@ END
 
 
 SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
-    X0_value, theta_tweezer, linewidth_k, &
+    X0_value, &
+    theta_tweezer, linewidth_k, &
     G_matrix, &
     Rayleigh_range, bead_mass, &
     E_drive, &
@@ -1218,7 +1240,8 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     double precision::half_kappa_exp_kHz, tweezer_wavelength
     INCLUDE 'CSCAVITY.h'
 
-    double precision::X0_value, theta_tweezer, linewidth_k
+    double precision::X0_value
+    double precision::theta_tweezer, linewidth_k
     double precision::G_matrix(6)
     double precision::Rayleigh_range, bead_mass
     double precision::E_drive
@@ -1234,7 +1257,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     double precision::pi, pi2
     double precision::kX0, half_kappa
-    double precision::photon_field_real, photon_field_imag
+    double precision::photon_field_prefactor, photon_field_real, photon_field_imag
     double precision::N_photon
     double precision::omega_CS_prefactor, dx_CS, dy_CS, dz_CS
     double precision::X_zpf, Y_zpf, Z_zpf
@@ -1254,8 +1277,9 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     kX0 = linewidth_k * X0_value
     ! photon number in cavity
     ! real part of photon field
-    photon_field_real = detuning * (E_drive / hbar) * cos(kX0) / (half_kappa**2 + detuning**2)
-    photon_field_imag = -half_kappa * (E_drive / hbar) * cos(kX0) / (half_kappa**2 + detuning**2)
+    photon_field_prefactor = (E_drive / hbar) * cos(kX0) / (half_kappa**2 + detuning**2)
+    photon_field_real = photon_field_prefactor * detuning
+    photon_field_imag = -photon_field_prefactor * half_kappa
 
     N_photon = ((E_drive / hbar) * cos(kX0))**2 / (half_kappa**2 + detuning**2)
 
@@ -1300,29 +1324,29 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) '---------------------------------------------'
         WRITE(stdout, *) 'EQUILIBRIUM PARAMETERS'
         WRITE(stdout, *) '---------------------------------------------'
-        WRITE(stdout, *) '(E_drive / hbar) / 2π = ', (E_drive / hbar) / pi2
+        WRITE(stdout, *) '(E_drive / hbar) = ', (E_drive / hbar)
         WRITE(stdout, *)
-        WRITE(stdout, *) 'detuning /Hz = ', detuning / pi2
-        WRITE(stdout, *) 'half_kappa /Hz = ', half_kappa / pi2
+        WRITE(stdout, *) 'detuning /kHz = ', detuning / pi2 * 1.d-3
+        WRITE(stdout, *) 'half_kappa /kHz = ', half_kappa / pi2 * 1.d-3
         WRITE(stdout, *) 'Number of photons in cavity = ', N_photon
         WRITE(stdout, *)
         WRITE(stdout, *) 'MECHANICAL FREQUENCIES IN THE TWEEZER FRAME'
-        WRITE(stdout, *) 'omega_x_0 /Hz = ', omega_x_0 / pi2
-        WRITE(stdout, *) 'omega_y_0 /Hz = ', omega_y_0 / pi2
-        WRITE(stdout, *) 'omega_z_0 /Hz = ', omega_z_0 / pi2
+        WRITE(stdout, *) 'omega_x_0 /kHz = ', omega_x_0 / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_y_0 /kHz = ', omega_y_0 / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_z_0 /kHz = ', omega_z_0 / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING CORRECTED'
-        WRITE(stdout, *) 'omega_x_CS /Hz = ', omega_x_CS / pi2
-        WRITE(stdout, *) 'omega_y_CS /Hz = ', omega_y_CS / pi2
-        WRITE(stdout, *) 'omega_z_CS /Hz = ', omega_z_CS / pi2
+        WRITE(stdout, *) 'omega_x_CS /kHz = ', omega_x_CS / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_y_CS /kHz = ', omega_y_CS / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_z_CS /kHz = ', omega_z_CS / pi2 * 1.d-3
         WRITE(stdout, *)
-        WRITE(stdout, *) 'g_xY /Hz', g_xY / pi2
-        WRITE(stdout, *) 'g_yY /Hz', g_yY / pi2
-        WRITE(stdout, *) 'g_zP /Hz', g_zP / pi2
+        WRITE(stdout, *) 'g_xY /kHz', g_xY / pi2 * 1.d-3
+        WRITE(stdout, *) 'g_yY /kHz', g_yY / pi2 * 1.d-3
+        WRITE(stdout, *) 'g_zP /kHz', g_zP / pi2 * 1.d-3
         WRITE(stdout, *)
-        WRITE(stdout, *) 'gxy /Hz', gxy / pi2
-        WRITE(stdout, *) 'gyz /Hz', gyz / pi2
-        WRITE(stdout, *) 'gzx /Hz', gzx / pi2
+        WRITE(stdout, *) 'gxy /kHz', gxy / pi2 * 1.d-3
+        WRITE(stdout, *) 'gyz /kHz', gyz / pi2 * 1.d-3
+        WRITE(stdout, *) 'gzx /kHz', gzx / pi2 * 1.d-3
     END IF
 
     ! Add optical spring correction to the frequency squared
@@ -1353,15 +1377,14 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     IF (equilibrium_debug == 1) THEN
         WRITE(stdout, *)
         WRITE(stdout, *) 'OPTICAL SPRING CORRECTED'
-        WRITE(stdout, *) 'omega_x_OPT /Hz = ', omega_x_OPT / pi2
-        WRITE(stdout, *) 'omega_y_OPT /Hz = ', omega_y_OPT / pi2
-        WRITE(stdout, *) 'omega_z_OPT /Hz = ', omega_z_OPT / pi2
-
+        WRITE(stdout, *) 'omega_x_OPT /kHz = ', omega_x_OPT / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_y_OPT /kHz = ', omega_y_OPT / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_z_OPT /kHz = ', omega_z_OPT / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING + OPTICAL SPRING CORRECTED'
-        WRITE(stdout, *) 'omega_x_CS_plus_OPT /Hz = ', omega_x_CS_plus_OPT / pi2
-        WRITE(stdout, *) 'omega_y_CS_plus_OPT /Hz = ', omega_y_CS_plus_OPT / pi2
-        WRITE(stdout, *) 'omega_z_CS_plus_OPT /Hz = ', omega_z_CS_plus_OPT / pi2
+        WRITE(stdout, *) 'omega_x_CS_plus_OPT /kHz = ', omega_x_CS_plus_OPT / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_y_CS_plus_OPT /kHz = ', omega_y_CS_plus_OPT / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_z_CS_plus_OPT /kHz = ', omega_z_CS_plus_OPT / pi2 * 1.d-3
 
     END IF
 
