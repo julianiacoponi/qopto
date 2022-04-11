@@ -20,7 +20,8 @@
 
     Free_Spectral_Range=14.d9, & ! /Hz
     bath_temperature=300.d0, & ! /K
-    air_pressure=3.e-3, & ! /millibars
+    air_pressure=3.d-3, & ! /millibars
+    air_speed=500.d0, & ! /ms^-1
 
     bead_diameter=120.d-9, & ! /metres
     bead_density=1850.d0, & ! /kgm^-3

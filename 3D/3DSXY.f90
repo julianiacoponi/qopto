@@ -9,7 +9,7 @@ IMPLICIT NONE
 ! parameter file with input values
 integer::N_total
 double precision::hbar, speed_of_light, kB, vacuum_permittivity
-double precision::Free_Spectral_Range, bath_temperature, air_pressure
+double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
 double precision::bead_diameter, bead_density, bead_permittivity
 double precision::cavity_waist, cavity_length, Finesse
 double precision::half_kappa_exp_kHz, tweezer_wavelength
@@ -31,7 +31,7 @@ double precision, DIMENSION(num_omega_samples)::&
 
 integer::ii, jj, nn
 double precision::pi, pi2
-double precision::X0_value, lambda_coeff, node, cancellation_point
+double precision::X0_value, lambda_coeff, node, half_node
 double precision::linewidth_k, theta_tweezer
 double precision::theta_homodyne_0
 double precision::cavity_photons
@@ -210,12 +210,11 @@ detuning = pi2 * detuning_kHz * 1.d3
 linewidth_k = pi2 / tweezer_wavelength
 theta_tweezer = theta_tweezer_degrees * pi / 180.
 
-! NOTE: doing num_X0_samples=500 seems to cause a SEGFAULT..
-num_X0_samples = 300
 node = 0.25d0
-cancellation_point = 0.125d0
+half_node = 0.125d0
 
-! TODO: make this work...
+! NOTE: doing num_X0_samples=500 seems to cause a SEGFAULT..
+num_X0_samples = 1
 IF (use_experimental_positions == 1) THEN
     num_X0_samples = 11
 END IF
@@ -246,6 +245,8 @@ WRITE(cavity_parameters, *) "speed_of_light", speed_of_light
 WRITE(cavity_parameters, *) "vacuum_permittivity", vacuum_permittivity
 
 WRITE(cavity_parameters, *) "Free_Spectral_Range", Free_Spectral_Range
+WRITE(cavity_parameters, *) "air_pressure", air_pressure
+WRITE(cavity_parameters, *) "air_speed", air_speed
 
 WRITE(cavity_parameters, *) "bead_diameter", bead_diameter
 WRITE(cavity_parameters, *) "bead_density", bead_density
@@ -259,7 +260,6 @@ WRITE(cavity_parameters, *) "half_kappa_exp_kHz", half_kappa_exp_kHz
 WRITE(cavity_parameters, *) "tweezer_wavelength", tweezer_wavelength
 
 WRITE(cavity_parameters, *) "detuning_kHz", detuning_kHz
-WRITE(cavity_parameters, *) "X0_experimental_positions", X0_experimental_positions
 WRITE(cavity_parameters, *) "tweezer_input_power", tweezer_input_power
 WRITE(cavity_parameters, *) "beam_waist_X", beam_waist_X
 WRITE(cavity_parameters, *) "beam_waist_Y", beam_waist_Y
@@ -281,7 +281,7 @@ DO ii=1, num_X0_samples
 
     IF (num_X0_samples == 1) THEN
         ! if ignoring X0 sampling, just set it to be the cancellation point
-        lambda_coeff = cancellation_point
+        lambda_coeff = half_node
     END IF
 
     X0_value = lambda_coeff * tweezer_wavelength
@@ -1127,7 +1127,7 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
 
     integer::N_total
     double precision::hbar, speed_of_light, kB, vacuum_permittivity
-    double precision::Free_Spectral_Range, bath_temperature, air_pressure
+    double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
     double precision::bead_diameter, bead_density, bead_permittivity
     double precision::cavity_waist, cavity_length, Finesse
     double precision::half_kappa_exp_kHz, tweezer_wavelength
@@ -1178,10 +1178,9 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     kappa = kappa_in + kappa_bead
 
     ! take usual expression e.g. Levitated review by Li Geraci etc
+    ! Appendix E of https://arxiv.org/pdf/1308.4503.pdf
     ! 1 bar = 10^5 pascal; air_pressure /mbar = 10^2 Pascal
-    ! Gamma_M = 1600 * air_pressure / (pi * air_speed * bead_density * bead_radius)
-    ! air_speed = 500 ms^-1
-    Gamma_M = 1600. * air_pressure / pi / 500. / bead_density / bead_radius
+    Gamma_M = (16. / pi) * ((air_pressure * 1.d2) / (bead_radius * bead_density * air_speed))
 
     omega_0_prefactor = polarisability * E_tweezer**2 / bead_mass
     omega_x_0 = sqrt(omega_0_prefactor / beam_waist_X**2)
@@ -1204,7 +1203,7 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
         WRITE(stdout, *)
         WRITE(stdout, *) 'kappa_in /kHz = ', kappa_in / pi2 * 1.d-3
         WRITE(stdout, *) 'kappa_bead (at node) /kHz = ', kappa_bead / pi2 * 1.d-3
-        WRITE(stdout, *) 'Calculated ptical damping: kappa_calc /kHz = ', kappa / pi2 * 1.d-3
+        WRITE(stdout, *) 'Calculated optical damping: kappa_calc /kHz = ', kappa / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
     END IF
@@ -1234,7 +1233,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     integer::N_total
     double precision::hbar, speed_of_light, kB, vacuum_permittivity
-    double precision::Free_Spectral_Range, bath_temperature, air_pressure
+    double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
     double precision::bead_diameter, bead_density, bead_permittivity
     double precision::cavity_waist, cavity_length, Finesse
     double precision::half_kappa_exp_kHz, tweezer_wavelength
