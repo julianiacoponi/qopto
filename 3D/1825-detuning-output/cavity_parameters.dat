@@ -1,30 +1,26 @@
- bead_radius   6.4000000000000004E-008
+ equation_choice           1
+ detuning_choice           2
+ use_experimental_positions           0
+ hbar   1.0545718170000000E-034
+ speed_of_light   299792498.00000000     
+ vacuum_permittivity   8.8541870000000005E-012
+ Free_Spectral_Range   14000000000.000000     
+ air_pressure   3.0000000000000001E-003
+ air_speed   500.00000000000000     
+ bead_diameter   1.2020000000000000E-007
  bead_density   1850.0000000000000     
- vacuum_permittivity   8.8539999999999992E-012
- relative_permittivity   1.9800000000000000     
- speed_of_light   300000000.00000000     
- hbar   1.0500000000000000E-034
- kB   1.3999999999999999E-023
- Gravity   9.8000000000000007     
- linewidth_k   5900000.0000000000     
- beam_waist_X   1.0430000000000000E-006
- beam_waist_Y   9.0350000000000001E-007
+ bead_permittivity   1.9800000000000000     
  cavity_waist   6.0999999999999999E-005
  cavity_length   1.2230000000000000E-002
  Finesse   30000.000000000000     
- air_pressure   3.0000000260770321E-003
- tweezer_input_power  0.44000000000000000     
- detuning_kHz_Antonio_0_91  -178.36000061035156     
- detuning_kHz_Antonio_1_825  -357.70001220703125     
- DelFSR   14000000000.000000     
- theta_0  0.25000000000000000     
- X0   2.6600000000000003E-007
- Y0   0.0000000000000000     
- Z0   0.0000000000000000     
- equation_choice           1
- detuning_choice           2
- detuning_kHz  -357.70001220703125     
- X0_experimental_positions  0.25000000000000000       0.22873405173189101       0.20775308904146200       0.19283301133628700       0.18642296982654000       0.16538718521984500       0.14495126037126099       0.11887540009154500        8.8730659057886699E-002   6.3585228148186901E-002   6.0412607486638598E-003
- omega_x_0   135.73649347244111     
- omega_y_0   156.69414797095305     
- omega_z_0   36.010690999726734     
+ half_kappa_exp_kHz   197.30000305175781     
+ tweezer_wavelength   1.0640000000000001E-006
+ detuning_kHz  -360.07251497745528     
+ tweezer_input_power  0.48499999999999999     
+ beam_waist_X   1.0679000000000000E-006
+ beam_waist_Y   9.2760000000000002E-007
+ theta_tweezer_radians  0.73199108828642179     
+ half_kappa_calc_kHz   204.27398337421641     
+ omega_x_tweezer   135.80185273723552     
+ omega_y_tweezer   156.34195616439607     
+ omega_z_tweezer   35.060791210072864     

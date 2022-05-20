@@ -11,29 +11,28 @@ integer::N_total
 double precision::hbar, speed_of_light, kB, vacuum_permittivity
 double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
 double precision::bead_diameter, bead_density, bead_permittivity
+double precision::tweezer_input_power, beam_waist_X, beam_waist_Y, theta_tweezer_over_pi
 double precision::cavity_waist, cavity_length, Finesse
 double precision::half_kappa_exp_kHz, tweezer_wavelength
 INCLUDE 'CSCAVITY.h'
 
-integer::equation_choice, detuning_choice, use_experimental_positions
-
-! parameters that change per detuning choice
-double precision::tweezer_input_power, theta_tweezer_degrees
-double precision::beam_waist_X, beam_waist_Y
+! user choices
+integer::equation_choice, detuning_choice, num_X0_samples
 
 ! loop this many samples over omega
-integer::num_X0_samples, num_omega_samples
+integer::num_omega_samples
 PARAMETER(num_omega_samples=50000)
 double precision, DIMENSION(num_omega_samples)::&
     omega_array, &
     S_XX_array, S_YY_array, S_ZZ_array, &
     S_homodyne_array, S_heterodyne_array
 
-integer::ii, jj, nn
+integer::ii, jj, nn, use_experimental_positions
 double precision::pi, pi2
-double precision::X0_value, lambda_coeff, node, half_node
-double precision::linewidth_k, theta_tweezer
+double precision::X0_value, lambda_coeff, node, half_node, X0_to_record_spectra_at
+double precision::linewidth_k
 double precision::theta_homodyne_0
+double precision::theta_tweezer_radians
 double precision::cavity_photons
 double precision::G_matrix(6)
 double precision::Rayleigh_range, bead_mass, polarisability
@@ -41,8 +40,8 @@ double precision::E_tweezer, E_cavity
 double precision::detuning, detuning_kHz
 double precision::kappa_exp, kappa_calc
 double precision::Gamma_M
-double precision::omega_0_prefactor
-double precision::omega_x_0, omega_y_0, omega_z_0
+double precision::omega_tweezer_prefactor
+double precision::omega_x_tweezer, omega_y_tweezer, omega_z_tweezer
 double precision::omega_x_CS, omega_y_CS, omega_z_CS
 double precision::omega_x_OPT, omega_y_OPT, omega_z_OPT
 double precision::omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT
@@ -50,7 +49,7 @@ double precision::max_omega, min_omega, omega_increment, omega_value, omega_kHz
 double precision::theta_homodyne
 double precision::E_drive
 double precision::S_XX_value, S_YY_value, S_ZZ_value
-double complex::S_XY_value, S_YX_value
+double complex::S_XY_value, S_YX_value, S_corr_value
 double precision::S_homodyne_value, S_homodyne_negative, S_heterodyne_value
 double precision::num_phonons_X, num_phonons_Y, num_phonons_Z
 double precision::num_photons, num_phonons
@@ -58,10 +57,14 @@ double precision::area_under_spectrum
 double precision::phonons_from_cooling_formula_array(3), phonons_array(3), x_y_phonons
 double precision::X0_experimental_positions(11)
 
+character(len=23)::experimental_positions_dir
+character(len=21)::detuning_dir
+character(len=2)::ss
+
 ! integer labels for WRITE for the .dat output files
-integer::all_spectra
+integer::QLT_spectra
 integer::omega_CS, omega_OPT, omega_CS_plus_OPT, omega_QLT
-integer::deviation_0, deviation_CS, deviation_OPT, deviation_CS_plus_OPT
+integer::deviation_tweezer, deviation_CS, deviation_OPT, deviation_CS_plus_OPT
 integer::OM_couplings, mech_couplings
 integer::cavity_parameters
 integer::stdout
@@ -75,13 +78,16 @@ bead_debug = 1
 equilibrium_debug = 1
 cooling_debug = 0
 
-all_spectra = 1
+! NOTE: make sure none of these file-specifying numbers clash
+QLT_spectra = 1
+! 'QLT_spectra_at_position_*.dat' files are labelled 10, 20, 30, ..., 110
+
 omega_CS = 21
 omega_OPT = 22
 omega_CS_plus_OPT = 23
 omega_QLT = 24
 
-deviation_0 = 31 ! omega_0 - omega_QLT
+deviation_tweezer = 31 ! omega_tweezer - omega_QLT
 deviation_CS = 32 ! omega_CS - omega_QLT
 deviation_OPT = 33 ! omega_OPT - omega_QLT
 deviation_CS_plus_OPT = 34 ! omega_CS_plus_OPT - omega_QLT
@@ -94,23 +100,28 @@ stdout = 6
 FTSXY = 7
 FTanOPT = 8
 GCOUPLE = 9
-PHONS = 10
+PHONS = 99
 
-WRITE(stdout, *)  "Which equations to use?"
+WRITE(stdout, *)  'Which equations to use for Sxy?'
 WRITE(stdout, *) '1 = Full 3D'
-WRITE(stdout, *) '2 = Simplified Eq. 18'
+WRITE(stdout, *) '2 = Simplified Sxy ~ (Sxx - Syy) * Gxy/(omega_y - omega_x)'
 READ(*, *) equation_choice
 
-WRITE(stdout, *)  "Which detuning to use?"
+WRITE(stdout, *)  'Which detuning to use?'
 WRITE(stdout, *) '1 = from Antonio`s data 0.91 (small detuning)'
 WRITE(stdout, *) '2 = from Antonio`s data 1.825 (large detuning)'
 READ(*, *) detuning_choice
 
-! TODO: make so that this saves a file for the spectra of each of these positions
-WRITE(stdout, *)  "Calculate spectra for just the experimental positions?"
-WRITE(stdout, *) '1 = Yes'
-WRITE(stdout, *) '2 = No'
-READ(*, *) use_experimental_positions
+! NOTE: doing num_X0_samples > 500 seems to cause a SEGFAULT..
+WRITE(stdout, *)  'How many X0 positions to sample between antinode and node? (max. 500)'
+READ(*, *) num_X0_samples
+
+WRITE(stdout, *) 'Start frequency sampling at what value? (kHz)'
+READ(*, *) min_omega
+
+! highest mechanical frequency is omega_y ~ 155kHz for these parameters
+WRITE(stdout, *) 'Stop frequency sampling at what value? (kHz)'
+READ(*, *) max_omega
 
 ! FORMAT can be understood from:
 ! https://pages.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
@@ -126,48 +137,51 @@ READ(*, *) use_experimental_positions
 ! '23' = number of positions to be used
 ! '15' = number of digits to the right of the decimal point
 ! NOTE: this is *not* the same as the precision of the number
-815 FORMAT(8ES23.15)
+1015 FORMAT(10ES23.15)
 503 FORMAT(5ES11.3)
 
-OPEN(all_spectra, file='all_spectra.dat', status='unknown')
-WRITE(all_spectra, *) 'kHz ', 'S_XX ', 'S_YY ', 'S_ZZ ', 'Re(S_XY) ', 'Im(S_XY) ', 'Re(S_YX) ', 'Im(S_YX)'
+node = 0.25d0
+half_node = 0.125d0
+X0_to_record_spectra_at = half_node
 
-OPEN(omega_QLT, file='omega_QLT.dat', status='unknown')
-OPEN(omega_CS, file='omega_CS.dat', status='unknown')
-OPEN(omega_OPT, file='omega_OPT.dat', status='unknown')
-OPEN(omega_CS_plus_OPT, file='omega_CS_plus_OPT.dat', status='unknown')
-WRITE(omega_QLT, *) 'X0/lambda ', 'omega_x_QLT ', 'omega_y_QLT ', 'omega_z_QLT'
-WRITE(omega_CS, *) 'X0/lambda ', 'omega_x_CS ', 'omega_y_CS ', 'omega_z_CS'
-WRITE(omega_OPT, *) 'X0/lambda ', 'omega_x_OPT ', 'omega_y_OPT ', 'omega_z_OPT'
-WRITE(omega_CS_plus_OPT, *) 'X0/lambda ', 'omega_x_CS_plus_OPT ', 'omega_y_CS_plus_OPT ', 'omega_z_CS_plus_OPT'
+pi = dacos(-1.d0)
+pi2 = 2.d0 * pi
 
-OPEN(deviation_0, file='deviation_0.dat', status='unknown')
-OPEN(deviation_CS, file='deviation_CS.dat', status='unknown')
-OPEN(deviation_OPT, file='deviation_OPT.dat', status='unknown')
-OPEN(deviation_CS_plus_OPT, file='deviation_CS_plus_OPT.dat', status='unknown')
-WRITE(deviation_0, *) 'X0/lambda ', 'deviation_0_X ', 'deviation_0_Y ', 'deviation_0_Z'
-WRITE(deviation_CS, *) 'X0/lambda ', 'deviation_CS_X ', 'deviation_CS_Y ', 'deviation_CS_Z'
-WRITE(deviation_OPT, *) 'X0/lambda ', 'deviation_OPT_X ', 'deviation_OPT_Y ', 'deviation_OPT_Z'
-WRITE(deviation_CS_plus_OPT, *) 'X0/lambda ', 'deviation_CS_plus_OPT_X ', 'deviation_CS_plus_OPT_Y ', 'deviation_CS_plus_OPT_Z'
+kappa_exp = pi2 * 2.d0 * half_kappa_exp_kHz * 1.d3 ! /rads^-1
+linewidth_k = pi2 / tweezer_wavelength ! m^-1
+theta_tweezer_radians = theta_tweezer_over_pi * pi  ! /rad
 
-OPEN(OM_couplings, file='OM_couplings.dat', status='unknown')
-OPEN(mech_couplings, file='mech_couplings.dat', status='unknown')
-WRITE(OM_couplings, *) 'X0/lambda ', 'g_xY ', 'g_yY ', 'g_zP'
-WRITE(mech_couplings, *) 'X0/lambda ', 'gxy ', 'gyz ', 'gzx'
+theta_homodyne_0 = 0.12d0
+theta_homodyne = theta_homodyne_0 * pi
 
-OPEN(FTSXY, file="FTSXY.dat", status="unknown")
-OPEN(FTanOPT, file="FTanOPT.dat", status="unknown")
-OPEN(GCOUPLE, file="GCOUPLE.dat", status="unknown")
-OPEN(PHONS, file="PHONS.dat", status="unknown")
+omega_increment = (max_omega - min_omega) / num_omega_samples
+IF (loop_debug == 1) THEN
+    WRITE(stdout, *)
+    WRITE(stdout, *) 'omega range /kHz = ', min_omega, ' to ', max_omega
+    WRITE(stdout, *) 'number of omega samples = ', num_omega_samples
+    WRITE(stdout, *) 'omega increment /kHz = ', omega_increment
+END IF
+
+! convert to radians
+min_omega = pi2 * min_omega * 1.d3
+omega_increment = pi2 * omega_increment * 1.d3
+
+CALL CALCULATE_BEAD_PARAMETERS(&
+    linewidth_k, theta_tweezer_radians, &
+    Rayleigh_range, bead_mass, polarisability, &
+    E_tweezer, E_cavity, E_drive, &
+    ! X0 to calculate (negligible) kappa_bead
+    node * tweezer_wavelength, &
+    ! get value for kappa_calc here
+    kappa_calc, Gamma_M, &
+    omega_tweezer_prefactor, &
+    omega_x_tweezer, omega_y_tweezer, omega_z_tweezer, &
+    bead_debug, stdout)
 
 ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /kHz
 IF (detuning_choice == 1) THEN
+    detuning_dir = '091-detuning-output/'
     detuning_kHz = -0.91 * half_kappa_exp_kHz
-    tweezer_input_power = 479.7d-3 ! /Watts
-    beam_waist_X = 1062.7d-9 ! /metres
-    beam_waist_Y = 927.4d-9 ! /metres
-    theta_tweezer_degrees = 55.d0 ! angle between tweezer polarisation and cavity axis
-
     ! taken from position_0.91.csv
     X0_experimental_positions(1) = 0.244100760452371d0
     X0_experimental_positions(2) = 0.235479343072498d0
@@ -182,12 +196,8 @@ IF (detuning_choice == 1) THEN
     X0_experimental_positions(11) = 0.0065752690208695d0
 
 ELSE IF (detuning_choice == 2) THEN
+    detuning_dir = '1825-detuning-output/'
     detuning_kHz = -1.825 * half_kappa_exp_kHz
-    tweezer_input_power = 487.d-3 ! /Watts
-    beam_waist_X = 1067.9d-9 ! /metres
-    beam_waist_Y = 927.6d-9 ! /metres
-    theta_tweezer_degrees = 40.5d0
-
     ! taken from position_1.825.csv
     X0_experimental_positions(1) = 0.25d0
     X0_experimental_positions(2) = 0.228734051731891d0
@@ -200,42 +210,14 @@ ELSE IF (detuning_choice == 2) THEN
     X0_experimental_positions(9) = 0.0887306590578867d0
     X0_experimental_positions(10) = 0.0635852281481869d0
     X0_experimental_positions(11) = 0.00604126074866386d0
+
 END IF
 
-pi = dacos(-1.d0)
-pi2 = 2.d0 * pi
+detuning = pi2 * detuning_kHz * 1.d3 ! rads^-1
 
-kappa_exp = pi2 * 2.d0 * half_kappa_exp_kHz * 1.d3 ! /rads^-1
-detuning = pi2 * detuning_kHz * 1.d3
-linewidth_k = pi2 / tweezer_wavelength
-theta_tweezer = theta_tweezer_degrees * pi / 180.
-
-node = 0.25d0
-half_node = 0.125d0
-
-! NOTE: doing num_X0_samples=500 seems to cause a SEGFAULT..
-num_X0_samples = 1
-IF (use_experimental_positions == 1) THEN
-    num_X0_samples = 11
-END IF
-
-theta_homodyne_0 = 0.12d0
-theta_homodyne = theta_homodyne_0 * pi
-
-CALL CALCULATE_BEAD_PARAMETERS(&
-    theta_tweezer, &
-    linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y, &
-    Rayleigh_range, bead_mass, polarisability, &
-    E_tweezer, E_cavity, E_drive, &
-    ! X0 to calculate (negligible) kappa_bead
-    node * tweezer_wavelength, &
-    ! get value for kappa_calc here
-    kappa_calc, Gamma_M, &
-    omega_0_prefactor, &
-    omega_x_0, omega_y_0, omega_z_0, &
-    bead_debug, stdout)
-
-OPEN(cavity_parameters, file='cavity_parameters.dat', status='unknown')
+! trim(detuning_dir) since 091 is 1 character fewer than 1825
+CALL system('mkdir '//trim(detuning_dir))
+OPEN(cavity_parameters, file=trim(detuning_dir)//'cavity_parameters.dat', status='unknown')
 WRITE(cavity_parameters, *) "equation_choice", equation_choice
 WRITE(cavity_parameters, *) "detuning_choice", detuning_choice
 WRITE(cavity_parameters, *) "use_experimental_positions", use_experimental_positions
@@ -263,271 +245,337 @@ WRITE(cavity_parameters, *) "detuning_kHz", detuning_kHz
 WRITE(cavity_parameters, *) "tweezer_input_power", tweezer_input_power
 WRITE(cavity_parameters, *) "beam_waist_X", beam_waist_X
 WRITE(cavity_parameters, *) "beam_waist_Y", beam_waist_Y
-WRITE(cavity_parameters, *) "theta_tweezer_degrees", theta_tweezer_degrees
+WRITE(cavity_parameters, *) "theta_tweezer_radians", theta_tweezer_radians
 
 WRITE(cavity_parameters, *) "half_kappa_calc_kHz", 0.5d0 * kappa_calc / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_x_0", omega_x_0 / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_y_0", omega_y_0 / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_z_0", omega_z_0 / pi2 * 1.d-3
+WRITE(cavity_parameters, *) "omega_x_tweezer", omega_x_tweezer / pi2 * 1.d-3
+WRITE(cavity_parameters, *) "omega_y_tweezer", omega_y_tweezer / pi2 * 1.d-3
+WRITE(cavity_parameters, *) "omega_z_tweezer", omega_z_tweezer / pi2 * 1.d-3
 
-! loop over the X0 equilibrium position
-DO ii=1, num_X0_samples
-    ! increase X0 in increments of num_X0_samples segments of a quarter wavelength (0.25 * lambda)
-    lambda_coeff = ii * node / num_X0_samples
+! NOTE: code relies on using experimental positions 2nd (otherwise num_X0_samples gets overwritten)
+DO use_experimental_positions=0, 1
+    IF (use_experimental_positions == 1) THEN
+        experimental_positions_dir = 'experimental-positions/'
+        CALL system('mkdir '//trim(detuning_dir)//experimental_positions_dir)
+        DO ii=1, 11
+            WRITE(ss, '(I0)') ii ! converts integer to string
+            OPEN(&
+            ii * 10, & ! numbered 10, 20, 30, ..., 110
+            file= &
+                trim(detuning_dir)// &
+                experimental_positions_dir// &
+                'QLT_spectra_at_position_'// &
+                trim(ss)// &
+                '.dat', &
+            status='unknown')
+            WRITE(ii * 10, *) &
+                'kHz ', &
+                ' S_XX S_YY S_ZZ', &
+                ' Re(S_XY) Im(S_XY)', &
+                ' Re(S_YX) Im(S_YX)', &
+                ' Re(S_corr) Im(S_corr)'
+        END DO
+    ELSE
+        experimental_positions_dir = ''
+        OPEN(QLT_spectra, file=trim(detuning_dir)//'QLT_spectra.dat', status='unknown')
+        WRITE(QLT_spectra, *) &
+            'kHz ', &
+            ' S_XX S_YY S_ZZ', &
+            ' Re(S_XY) Im(S_XY)', &
+            ' Re(S_YX) Im(S_YX)', &
+            ' Re(S_corr) Im(S_corr)'
+    END IF
+
+    ! trim(experimental_positions_dir) as it could be '' at this point
+    OPEN(omega_QLT, file=trim(detuning_dir)//trim(experimental_positions_dir)//'omega_QLT.dat', status='unknown')
+    OPEN(omega_CS, file=trim(detuning_dir)//trim(experimental_positions_dir)//'omega_CS.dat', status='unknown')
+    OPEN(omega_OPT, file=trim(detuning_dir)//trim(experimental_positions_dir)//'omega_OPT.dat', status='unknown')
+    OPEN(omega_CS_plus_OPT, file=trim(detuning_dir)//trim(experimental_positions_dir)//'omega_CS_plus_OPT.dat', status='unknown')
+
+    OPEN(deviation_tweezer, file=trim(detuning_dir)//trim(experimental_positions_dir)//'deviation_tweezer.dat', status='unknown')
+    OPEN(deviation_CS, file=trim(detuning_dir)//trim(experimental_positions_dir)//'deviation_CS.dat', status='unknown')
+    OPEN(deviation_OPT, file=trim(detuning_dir)//trim(experimental_positions_dir)//'deviation_OPT.dat', status='unknown')
+    OPEN(&
+        deviation_CS_plus_OPT, &
+        file=trim(detuning_dir)//trim(experimental_positions_dir)//'deviation_CS_plus_OPT.dat', status='unknown')
+
+    OPEN(OM_couplings, file=trim(detuning_dir)//trim(experimental_positions_dir)//'OM_couplings.dat', status='unknown')
+    OPEN(mech_couplings, file=trim(detuning_dir)//trim(experimental_positions_dir)//'mech_couplings.dat', status='unknown')
+
+    WRITE(omega_QLT, *) 'X0/lambda omega_x_QLT omega_y_QLT omega_z_QLT'
+    WRITE(omega_CS, *) 'X0/lambda omega_x_CS omega_y_CS omega_z_CS'
+    WRITE(omega_OPT, *) 'X0/lambda omega_x_OPT omega_y_OPT omega_z_OPT'
+    WRITE(omega_CS_plus_OPT, *) 'X0/lambda omega_x_CS_plus_OPT omega_y_CS_plus_OPT omega_z_CS_plus_OPT'
+
+    WRITE(deviation_tweezer, *) 'X0/lambda deviation_tweezer_X deviation_tweezer_Y deviation_tweezer_Z'
+    WRITE(deviation_CS, *) 'X0/lambda deviation_CS_X deviation_CS_Y deviation_CS_Z'
+    WRITE(deviation_OPT, *) 'X0/lambda deviation_OPT_X deviation_OPT_Y deviation_OPT_Z'
+    WRITE(deviation_CS_plus_OPT, *) 'X0/lambda deviation_CS_plus_OPT_X deviation_CS_plus_OPT_Y deviation_CS_plus_OPT_Z'
+
+    WRITE(OM_couplings, *) 'X0/lambda g_xY g_yY g_zP'
+    WRITE(mech_couplings, *) 'X0/lambda gxy gyz gzx'
+
+    OPEN(FTSXY, file=trim(detuning_dir)//"FTSXY.dat", status="unknown")
+    OPEN(FTanOPT, file=trim(detuning_dir)//"FTanOPT.dat", status="unknown")
+    OPEN(GCOUPLE, file=trim(detuning_dir)//"GCOUPLE.dat", status="unknown")
+    OPEN(PHONS, file=trim(detuning_dir)//"PHONS.dat", status="unknown")
 
     IF (use_experimental_positions == 1) THEN
-        lambda_coeff = X0_experimental_positions(ii)
+        num_X0_samples = 11
     END IF
 
-    IF (num_X0_samples == 1) THEN
-        ! if ignoring X0 sampling, just set it to be the cancellation point
-        lambda_coeff = half_node
-    END IF
-
-    X0_value = lambda_coeff * tweezer_wavelength
-
-    CALL CALCULATE_EQUILIBRIUM_PARAMETERS(&
-        X0_value, &
-        theta_tweezer, linewidth_k, &
-        G_matrix, &
-        Rayleigh_range, bead_mass, &
-        E_drive, &
-        ! use kappa_exp here, not kappa_calc
-        detuning, kappa_exp, Gamma_M, &
-        omega_x_0, omega_y_0, omega_z_0, &
-        omega_x_CS, omega_y_CS, omega_z_CS, &
-        omega_x_OPT, omega_y_OPT, omega_z_OPT, &
-        omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT, &
-        num_phonons_X, num_phonons_Y, num_phonons_Z, &
-        phonons_from_cooling_formula_array, &
-        equilibrium_debug, cooling_debug, stdout)
-
-    ! only write to certain files
-    IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
-        WRITE(GCOUPLE, 503) theta_tweezer, (abs(G_matrix(ii)), nn=1, 6)
-    END IF
-
-    cavity_photons = (E_drive / hbar)**2 * cos(linewidth_k * X0_value)**2 / ((0.5d0 * kappa_exp)**2 + detuning**2)
-    IF (loop_debug == 1) THEN
-        WRITE(stdout, *)
-        WRITE(stdout, *) '#########################################################################'
-        WRITE(stdout, *) 'X0 loop', ii, 'of', num_X0_samples
-        WRITE(stdout, *) '-------------------------------------------------------------------------'
-        WRITE(stdout, *) 'lambda_coeff = ', lambda_coeff
-        WRITE(stdout, *) 'Number of photons in cavity', cavity_photons
-    END IF
-
-    ! shot noise
-    num_photons = 0.d0
-
-    ! open loop over frequency for noise spectra
-    ! e.g. S_XX(omega) = FT(autocorrelation<X(t).X^dag(t + tau)>)
-    S_homodyne_array = 0.d0
-
-    ! expecting peaks at the mechanical frequencies, so sample twice the largest one
-    ! omega_y_0 ~ 155kHz for these parameters
-    ! max_omega = 2.d0 * omega_y_0 * 1.001
-
-    ! maybe just go to 200kHz?
-    max_omega = pi2 * 200 * 1.d3
-
-    ! either use: postive and negative omega
-    min_omega = -max_omega
-    ! or: focus only on positive omega
-    min_omega = 0.d0
-
-    omega_increment = (max_omega - min_omega) / num_omega_samples
-
-    IF (loop_debug == 1) THEN
-        WRITE(stdout, *) 'omega range = ', min_omega, ' to ', max_omega
-        WRITE(stdout, *) 'omega increment = ', omega_increment
-    END IF
-
-    DO jj=1, num_omega_samples
-        omega_value = min_omega + (jj - 1) * omega_increment
-        ! store frequency for integration
-        omega_array(jj) = omega_value
-        ! work out PSD of homodyne
-        ! work out  for negative frequency for symmetrisation
-        CALL CALCULATE_SPECTRA(&
-            equation_choice, &
-            N_total, &
-            theta_homodyne, &
-            G_matrix, &
-            num_photons, &
-            num_phonons_X, num_phonons_Y, num_phonons_Z, &
-            detuning, kappa_exp, Gamma_M, &
-            -omega_value, &
-            ! OPT corrrection is a dynamical effect which calculating the PSDs via QLT should produce
-            ! so just use the CS correction as the input for the QLT PSDs
-            omega_x_CS, omega_y_CS, omega_z_CS, &
-            S_XX_value, S_YY_value, S_ZZ_value, &
-            S_XY_value, S_YX_value, & ! cross-correlation spectra (can be complex)
-            S_homodyne_value, S_heterodyne_value)
-
-        ! update homodyne and symm disp.
-        ! TODO: clarify what the homodyne calc is doing here...
-        S_homodyne_negative = S_homodyne_negative + S_homodyne_value
-
-        ! work out same for positive and symmetrise homodyne
-        CALL CALCULATE_SPECTRA(&
-            equation_choice, &
-            N_total, &
-            theta_homodyne, &
-            G_matrix, &
-            num_photons, &
-            num_phonons_X, num_phonons_Y, num_phonons_Z, &
-            detuning, kappa_exp, Gamma_M, &
-            omega_value, &
-            omega_x_CS, omega_y_CS, omega_z_CS, &
-            S_XX_value, S_YY_value, S_ZZ_value, &
-            S_XY_value, S_YX_value, &
-            S_homodyne_value, S_heterodyne_value)
-
-        ! update
-        S_homodyne_negative = 0.5d0 * (S_homodyne_negative + S_homodyne_value)
-        omega_kHz = omega_value / pi2 * 1.d-3
-
-        ! only record the spectra at one point
-        IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
-            WRITE(all_spectra, 815) &
-                omega_kHz, S_XX_value, S_YY_value, S_ZZ_value, &
-                real(S_XY_value), aimag(S_XY_value), real(S_YX_value), aimag(S_YX_value)
-            WRITE(FTSXY, 503) omega_kHz, S_XY_value, S_YX_value
-            WRITE(FTanOPT, 503) omega_kHz, S_heterodyne_value, S_homodyne_value
+    ! loop over the X0 equilibrium position
+    DO ii=1, num_X0_samples
+        IF (use_experimental_positions == 1) THEN
+            lambda_coeff = X0_experimental_positions(ii)
+        ELSE
+            ! increase X0 in increments of num_X0_samples segments of a quarter wavelength (0.25 * lambda)
+            lambda_coeff = ii * node / num_X0_samples
         END IF
 
-        S_XX_array(jj) = S_XX_value
-        S_YY_array(jj) = S_YY_value
-        S_ZZ_array(jj) = S_ZZ_value
-        S_heterodyne_array(jj) = S_heterodyne_value
-        ! to find optimal squeezing
-        S_homodyne_array(jj) = S_homodyne_negative
+        IF (num_X0_samples == 1) THEN
+            ! if ignoring X0 sampling, just run the loop once
+            lambda_coeff = X0_to_record_spectra_at
+        END IF
 
-    ! end of loop over omega samples
+        X0_value = lambda_coeff * tweezer_wavelength
+        cavity_photons = (E_drive / hbar)**2 * cos(linewidth_k * X0_value)**2 / ((0.5d0 * kappa_exp)**2 + detuning**2)
+        IF (loop_debug == 1) THEN
+            WRITE(stdout, *)
+            WRITE(stdout, *) '#########################################################################'
+            WRITE(stdout, *) 'X0 loop', ii, 'of', num_X0_samples
+            WRITE(stdout, *) '-------------------------------------------------------------------------'
+            WRITE(stdout, *) 'X0 /lambda = ', lambda_coeff
+            WRITE(stdout, *) 'Number of photons in cavity', cavity_photons
+        END IF
+
+        CALL CALCULATE_EQUILIBRIUM_PARAMETERS(&
+            X0_value, &
+            linewidth_k, theta_tweezer_radians, &
+            G_matrix, &
+            Rayleigh_range, bead_mass, &
+            E_drive, &
+            ! use kappa_exp here, not kappa_calc
+            detuning, kappa_exp, Gamma_M, &
+            omega_x_tweezer, omega_y_tweezer, omega_z_tweezer, &
+            omega_x_CS, omega_y_CS, omega_z_CS, &
+            omega_x_OPT, omega_y_OPT, omega_z_OPT, &
+            omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT, &
+            num_phonons_X, num_phonons_Y, num_phonons_Z, &
+            phonons_from_cooling_formula_array, &
+            equilibrium_debug, cooling_debug, stdout)
+
+        ! only save coupling values at a certain X0 value
+        IF (lambda_coeff == X0_to_record_spectra_at) THEN
+            WRITE(GCOUPLE, 503) theta_tweezer_radians, (abs(G_matrix(ii)), nn=1, 6)
+        END IF
+
+        ! shot noise
+        num_photons = 0.d0
+
+        ! open loop over frequency for noise spectra
+        ! e.g. S_XX(omega) = FT(autocorrelation<X(t).X^dag(t + tau)>)
+        S_homodyne_array = 0.d0
+
+        DO jj=1, num_omega_samples
+            omega_value = min_omega + (jj - 1) * omega_increment
+            ! store frequency for integration
+            omega_array(jj) = omega_value
+            ! work out PSD of homodyne
+            ! work out  for negative frequency for symmetrisation
+            CALL CALCULATE_SPECTRA(&
+                equation_choice, &
+                N_total, &
+                theta_homodyne, &
+                G_matrix, &
+                num_photons, &
+                num_phonons_X, num_phonons_Y, num_phonons_Z, &
+                detuning, kappa_exp, Gamma_M, &
+                -omega_value, &
+                ! OPT corrrection is a dynamical effect which calculating the PSDs via QLT should produce
+                ! so just use the CS correction as the input for the QLT PSDs
+                omega_x_CS, omega_y_CS, omega_z_CS, &
+                S_XX_value, S_YY_value, S_ZZ_value, &
+                ! cross-correlation spectra (can be complex)
+                S_XY_value, S_YX_value, S_corr_value, &
+                S_homodyne_value, S_heterodyne_value)
+
+            ! update homodyne and symm disp.
+            ! TODO: clarify what the homodyne calc is doing here...
+            S_homodyne_negative = S_homodyne_negative + S_homodyne_value
+
+            ! work out same for positive and symmetrise homodyne
+            CALL CALCULATE_SPECTRA(&
+                equation_choice, &
+                N_total, &
+                theta_homodyne, &
+                G_matrix, &
+                num_photons, &
+                num_phonons_X, num_phonons_Y, num_phonons_Z, &
+                detuning, kappa_exp, Gamma_M, &
+                omega_value, &
+                omega_x_CS, omega_y_CS, omega_z_CS, &
+                S_XX_value, S_YY_value, S_ZZ_value, &
+                S_XY_value, S_YX_value, S_corr_value, &
+                S_homodyne_value, S_heterodyne_value)
+
+            ! update
+            S_homodyne_negative = 0.5d0 * (S_homodyne_negative + S_homodyne_value)
+            omega_kHz = omega_value / pi2 * 1.d-3
+
+            IF (use_experimental_positions == 1) THEN
+                ! spectra_position files are labelled 10,20,30,...,110
+                WRITE(ii * 10, 1015) &
+                    omega_kHz, &
+                    S_XX_value, S_YY_value, S_ZZ_value, &
+                    real(S_XY_value), aimag(S_XY_value), &
+                    real(S_YX_value), aimag(S_YX_value), &
+                    real(S_corr_value), aimag(S_corr_value)
+            ELSE IF (lambda_coeff == X0_to_record_spectra_at) THEN
+                ! only record the spectra at one point
+                WRITE(QLT_spectra, 1015) &
+                    omega_kHz, &
+                    S_XX_value, S_YY_value, S_ZZ_value, &
+                    real(S_XY_value), aimag(S_XY_value), &
+                    real(S_YX_value), aimag(S_YX_value), &
+                    real(S_corr_value), aimag(S_corr_value)
+            WRITE(FTSXY, 503) omega_kHz, S_XY_value, S_YX_value
+                WRITE(FTanOPT, 503) omega_kHz, S_heterodyne_value, S_homodyne_value
+            END IF
+
+            S_XX_array(jj) = S_XX_value
+            S_YY_array(jj) = S_YY_value
+            S_ZZ_array(jj) = S_ZZ_value
+            S_heterodyne_array(jj) = S_heterodyne_value
+            ! to find optimal squeezing
+            S_homodyne_array(jj) = S_homodyne_negative
+
+        ! end of loop over omega samples
+        END DO
+
+        IF (extra_debug == 1) THEN
+            ! verify indexing using maxloc() gives the same value as maxval()
+            WRITE(stdout, *) &
+                'Peak spectral values (S_XX, S_YY, S_ZZ), using maxval()', &
+                maxval(S_XX_array), &
+                maxval(S_YY_array), &
+                maxval(S_ZZ_array)
+            WRITE(stdout, *) &
+                'Peak spectral values (S_XX, S_YY, S_ZZ), using the index from maxloc()', &
+                S_XX_array(maxloc(S_XX_array)), &
+                S_YY_array(maxloc(S_YY_array)), &
+                S_ZZ_array(maxloc(S_ZZ_array))
+        END IF
+
+        WRITE(omega_CS, 1015) &
+            lambda_coeff, &
+            omega_x_CS / pi2 * 1.d-3, &
+            omega_y_CS / pi2 * 1.d-3, &
+            omega_z_CS / pi2 * 1.d-3
+
+        WRITE(omega_OPT, 1015) &
+            lambda_coeff, &
+            omega_x_OPT / pi2 * 1.d-3, &
+            omega_y_OPT / pi2 * 1.d-3, &
+            omega_z_OPT / pi2 * 1.d-3
+
+        WRITE(omega_CS_plus_OPT, 1015) &
+            lambda_coeff, &
+            omega_x_CS_plus_OPT / pi2 * 1.d-3, &
+            omega_y_CS_plus_OPT / pi2 * 1.d-3, &
+            omega_z_CS_plus_OPT / pi2 * 1.d-3
+
+        WRITE(omega_QLT, 1015) &
+            lambda_coeff, &
+            omega_array(maxloc(S_XX_array)) / pi2 * 1.d-3, &
+            omega_array(maxloc(S_YY_array)) / pi2 * 1.d-3, &
+            omega_array(maxloc(S_ZZ_array)) / pi2 * 1.d-3
+
+        WRITE(deviation_tweezer, 1015) &
+            lambda_coeff, &
+            (omega_x_tweezer - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
+            (omega_y_tweezer - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
+            (omega_z_tweezer - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
+        WRITE(deviation_CS, 1015) &
+            lambda_coeff, &
+            (omega_x_CS - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
+            (omega_y_CS - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
+            (omega_z_CS - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
+        WRITE(deviation_OPT, 1015) &
+            lambda_coeff, &
+            (omega_x_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
+            (omega_y_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
+            (omega_z_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
+        ! NOTE: this should be ~zero, as the PSD peaks should simulate the dynamical effect of the optical spring
+        WRITE(deviation_CS_plus_OPT, 1015) &
+            lambda_coeff, &
+            (omega_x_CS_plus_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
+            (omega_y_CS_plus_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
+            (omega_z_CS_plus_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
+
+        WRITE(OM_couplings, 1015) &
+            lambda_coeff, &
+            G_matrix(1) / pi2 * 1.d-3, &
+            G_matrix(2) / pi2 * 1.d-3, &
+            G_matrix(3) / pi2 * 1.d-3
+
+        WRITE(mech_couplings, 1015) &
+            lambda_coeff, &
+            G_matrix(4) / pi2 * 1.d-3, &
+            G_matrix(5) / pi2 * 1.d-3, &
+            G_matrix(6) / pi2 * 1.d-3
+
+        IF (extra_debug == 1) THEN
+            num_phonons = (omega_x_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
+            num_phonons = num_phonons / 4. / omega_x_CS / (-detuning)
+            WRITE(stdout, *) 'X: back action limited phonons', num_phonons
+
+            num_phonons = (omega_y_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
+            num_phonons = num_phonons / 4. / omega_y_CS / (-detuning)
+            WRITE(stdout, *) 'Y: back action limited phonons', num_phonons
+
+            num_phonons = (omega_z_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
+            num_phonons = num_phonons / 4. / omega_z_CS / (-detuning)
+            WRITE(stdout, *) 'Z: back action limited phonons', num_phonons
+
+            ! TODO: figure out why this gives different areas to original for S_ZZ and S_het?
+            ! integrate and normalise the quantum noise spectra
+            CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_XX_array, area_under_spectrum)
+            ! Area corresponds to 2n+1 so convert to get n
+            phonons_array(1) = 0.5d0 * (area_under_spectrum - 1.d0)
+            WRITE(stdout, *) 'X phonons from: cooling formula, S_XX FT'
+            WRITE(stdout, 1015) phonons_from_cooling_formula_array(1), phonons_array(1)
+
+            CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_YY_array, area_under_spectrum)
+            phonons_array(2) = 0.5d0 * (area_under_spectrum - 1.d0)
+            WRITE(stdout, *) 'Y phonons from: cooling formula, S_YY FT'
+            WRITE(stdout, 1015) phonons_from_cooling_formula_array(2), phonons_array(2)
+
+            CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_ZZ_array, area_under_spectrum)
+            phonons_array(3) = 0.5d0 * (area_under_spectrum - 1.d0)
+            WRITE(stdout, *) 'Z phonons from: cooling formula, S_ZZ FT'
+            WRITE(stdout, 1015) phonons_from_cooling_formula_array(3), phonons_array(3)
+
+            CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_heterodyne_array, area_under_spectrum)
+            ! Area num_phonons corresponds to 2(nx+ny)+2 so DIFFERENT CONVERSION  to get nx+ny
+            x_y_phonons = 0.5d0 * (area_under_spectrum - 2.d0)
+            WRITE(stdout, *) 'X+Y phonons from S_heterodyne FT'
+            WRITE(stdout, 1015) x_y_phonons
+        END IF
+
+        IF (lambda_coeff == X0_to_record_spectra_at) THEN
+            WRITE(PHONS, 503) &
+                detuning, &
+                phonons_array(1), phonons_array(2), x_y_phonons, &
+                phonons_from_cooling_formula_array(1), phonons_from_cooling_formula_array(2), phonons_from_cooling_formula_array(3)
+        END IF
+
+    ! end of loop over X0 samples
     END DO
-
-    IF (extra_debug == 1) THEN
-        ! verify indexing using maxloc() gives the same value as maxval()
-        WRITE(stdout, *) &
-            'Peak spectral values (S_XX, S_YY, S_ZZ), using maxval()', &
-            maxval(S_XX_array), &
-            maxval(S_YY_array), &
-            maxval(S_ZZ_array)
-        WRITE(stdout, *) &
-            'Peak spectral values (S_XX, S_YY, S_ZZ), using the index from maxloc()', &
-            S_XX_array(maxloc(S_XX_array)), &
-            S_YY_array(maxloc(S_YY_array)), &
-            S_ZZ_array(maxloc(S_ZZ_array))
-    END IF
-
-    WRITE(omega_CS, 815) &
-        lambda_coeff, &
-        omega_x_CS / pi2 * 1.d-3, &
-        omega_y_CS / pi2 * 1.d-3, &
-        omega_z_CS / pi2 * 1.d-3
-
-    WRITE(omega_OPT, 815) &
-        lambda_coeff, &
-        omega_x_OPT / pi2 * 1.d-3, &
-        omega_y_OPT / pi2 * 1.d-3, &
-        omega_z_OPT / pi2 * 1.d-3
-
-    WRITE(omega_CS_plus_OPT, 815) &
-        lambda_coeff, &
-        omega_x_CS_plus_OPT / pi2 * 1.d-3, &
-        omega_y_CS_plus_OPT / pi2 * 1.d-3, &
-        omega_z_CS_plus_OPT / pi2 * 1.d-3
-
-    WRITE(omega_QLT, 815) &
-        lambda_coeff, &
-        omega_array(maxloc(S_XX_array)) / pi2 * 1.d-3, &
-        omega_array(maxloc(S_YY_array)) / pi2 * 1.d-3, &
-        omega_array(maxloc(S_ZZ_array)) / pi2 * 1.d-3
-
-    WRITE(deviation_0, 815) &
-        lambda_coeff, &
-        (omega_x_0 - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
-        (omega_y_0 - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
-        (omega_z_0 - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
-
-    WRITE(deviation_CS, 815) &
-        lambda_coeff, &
-        (omega_x_CS - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
-        (omega_y_CS - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
-        (omega_z_CS - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
-
-    WRITE(deviation_OPT, 815) &
-        lambda_coeff, &
-        (omega_x_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
-        (omega_y_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
-        (omega_z_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
-
-    ! NOTE: this should be ~zero, as the PSD peaks should simulate the dynamical effect of the optical spring
-    WRITE(deviation_CS_plus_OPT, 815) &
-        lambda_coeff, &
-        (omega_x_CS_plus_OPT - omega_array(maxloc(S_XX_array))) / pi2 * 1.d-3 , &
-        (omega_y_CS_plus_OPT - omega_array(maxloc(S_YY_array))) / pi2 * 1.d-3 , &
-        (omega_z_CS_plus_OPT - omega_array(maxloc(S_ZZ_array))) / pi2 * 1.d-3
-
-    WRITE(OM_couplings, 815) &
-        lambda_coeff, &
-        G_matrix(1) / pi2 * 1.d-3, &
-        G_matrix(2) / pi2 * 1.d-3, &
-        G_matrix(3) / pi2 * 1.d-3
-
-    WRITE(mech_couplings, 815) &
-        lambda_coeff, &
-        G_matrix(4) / pi2 * 1.d-3, &
-        G_matrix(5) / pi2 * 1.d-3, &
-        G_matrix(6) / pi2 * 1.d-3
-
-    IF (extra_debug == 1) THEN
-        num_phonons = (omega_x_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
-        num_phonons = num_phonons / 4. / omega_x_CS / (-detuning)
-        WRITE(stdout, *) 'X: back action limited phonons', num_phonons
-
-        num_phonons = (omega_y_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
-        num_phonons = num_phonons / 4. / omega_y_CS / (-detuning)
-        WRITE(stdout, *) 'Y: back action limited phonons', num_phonons
-
-        num_phonons = (omega_z_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
-        num_phonons = num_phonons / 4. / omega_z_CS / (-detuning)
-        WRITE(stdout, *) 'Z: back action limited phonons', num_phonons
-
-        ! TODO: figure out why this gives different areas to original for S_ZZ and S_het?
-        ! integrate and normalise the quantum noise spectra
-        CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_XX_array, area_under_spectrum)
-        ! Area corresponds to 2n+1 so convert to get n
-        phonons_array(1) = 0.5d0 * (area_under_spectrum - 1.d0)
-        WRITE(stdout, *) 'X phonons from: cooling formula, S_XX FT'
-        WRITE(stdout, 815) phonons_from_cooling_formula_array(1), phonons_array(1)
-
-        CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_YY_array, area_under_spectrum)
-        phonons_array(2) = 0.5d0 * (area_under_spectrum - 1.d0)
-        WRITE(stdout, *) 'Y phonons from: cooling formula, S_YY FT'
-        WRITE(stdout, 815) phonons_from_cooling_formula_array(2), phonons_array(2)
-
-        CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_ZZ_array, area_under_spectrum)
-        phonons_array(3) = 0.5d0 * (area_under_spectrum - 1.d0)
-        WRITE(stdout, *) 'Z phonons from: cooling formula, S_ZZ FT'
-        WRITE(stdout, 815) phonons_from_cooling_formula_array(3), phonons_array(3)
-
-        CALL INTEGRATE_SPECTRUM(num_omega_samples, omega_increment, S_heterodyne_array, area_under_spectrum)
-        ! Area num_phonons corresponds to 2(nx+ny)+2 so DIFFERENT CONVERSION  to get nx+ny
-        x_y_phonons = 0.5d0 * (area_under_spectrum - 2.d0)
-        WRITE(stdout, *) 'X+Y phonons from S_heterodyne FT'
-        WRITE(stdout, 815) x_y_phonons
-    END IF
-
-    IF (ii == (num_X0_samples / 2).OR.use_experimental_positions == 1) THEN
-        WRITE(PHONS, 503) &
-            detuning, &
-            phonons_array(1), phonons_array(2), x_y_phonons, &
-            phonons_from_cooling_formula_array(1), phonons_from_cooling_formula_array(2), phonons_from_cooling_formula_array(3)
-    END IF
-
-! end of loop over X0 samples
+! do user inputted number of X0 samples first, experimental positions 2nd
 END DO
 
 STOP
@@ -545,7 +593,7 @@ SUBROUTINE CALCULATE_SPECTRA(&
     omega, &
     omega_x, omega_y, omega_z, &
     S_XX_value, S_YY_value, S_ZZ_value, &
-    S_XY_value, S_YX_value, &
+    S_XY_value, S_YX_value, S_corr_value, &
     S_homodyne_value, S_heterodyne_value)
     ! """
     !  Generic routine for noise spectra of trap and probe beams
@@ -562,13 +610,13 @@ SUBROUTINE CALCULATE_SPECTRA(&
     double precision::omega
     double precision::omega_x, omega_y, omega_z
     double precision::S_XX_value, S_YY_value, S_ZZ_value
-    double complex::S_XY_value, S_YX_value
+    double complex::S_XY_value, S_YX_value, S_corr_value
     double precision::S_homodyne_value, S_heterodyne_value
 
     double precision::pi
     double precision::G_average
     double precision::omega_heterodyne, omega_addition
-    double complex::gxy
+    double complex::bigGxy
     double complex::chi_C, chi_C_star
     double complex::chi_X, chi_X_star
     double complex::chi_Y, chi_Y_star
@@ -640,12 +688,20 @@ SUBROUTINE CALCULATE_SPECTRA(&
     S_YX_value = S_YX_value + (num_phonons_Z + 1) * Y_vector(1, 7) * conjg(X_vector(1, 7))
     S_YX_value = S_YX_value + num_phonons_Z * Y_vector(1, 8) * conjg(X_vector(1, 8))
 
-    S_XY_value = 0.5 * (S_XY_value + S_YX_value)
+    S_corr_value = 0.5 * (S_XY_value + S_YX_value)
 
     IF (equation_choice == 2) THEN
-        gxy = a_hat_vector(1, 4)
-        ! IN THIS VERSION WE WORK OUT Eq. 18,  simplified version of cross-correlation
-        S_YX_value = (S_XX_value - S_YY_value) * gxy / (omega_y - omega_x)
+        bigGxy = a_hat_vector(1, 4)
+
+        ! bigGxy = cavity-mediated + direct
+        ! bigGxy = imag_num * eta_C * g_xY * g_yY + gxy
+        ! gxy/(g_xY*g_yY) = B cot(kX0)**2
+        ! B = 2*detuning/(detuning**2 + half_kappa**2)
+
+        ! So:
+        ! bigGxy = g_xY * g_yY * (imag_num * eta_C + B * cot(phi)))
+        ! simplified version of cross-correlation
+        S_corr_value = (bigGxy / (omega_y - omega_x)) * (S_XX_value - S_YY_value)
     END IF
 
     ! work out homodyne spectra using same vectors
@@ -859,7 +915,7 @@ SUBROUTINE CALCULATE_NOISE_VECTORS(&
     mu_Y = chi_Y - chi_Y_star
     mu_Z = chi_Z - chi_Z_star
 
-    ! coeff of X-Y coupling- Combines direct and indirect paths
+    ! coeff of X-Y coupling - Combines direct and indirect paths
     G_coeff_XY = gxy + imag_num * eta_C_0 * g_xY * g_yY
     G_coeff_YX = gxy + imag_num * eta_C_0 * g_xY * g_yY
     G_coeff_XZ = gzx + imag_num * eta_C_neg_half_pi * g_zP * g_xY
@@ -1110,14 +1166,13 @@ END
 
 
 SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
-    theta_tweezer, &
-    linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y, &
+    linewidth_k, theta_tweezer_radians, &
     Rayleigh_range, bead_mass, polarisability, &
     E_tweezer, E_cavity, E_drive, &
     X0, &
     kappa, Gamma_M, &
-    omega_0_prefactor, &
-    omega_x_0, omega_y_0, omega_z_0, &
+    omega_tweezer_prefactor, &
+    omega_x_tweezer, omega_y_tweezer, omega_z_tweezer, &
     bead_debug, stdout)
     ! """
     ! subroutine below is provided by user
@@ -1129,23 +1184,23 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     double precision::hbar, speed_of_light, kB, vacuum_permittivity
     double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
     double precision::bead_diameter, bead_density, bead_permittivity
+    double precision::tweezer_input_power, beam_waist_X, beam_waist_Y, theta_tweezer_over_pi
     double precision::cavity_waist, cavity_length, Finesse
     double precision::half_kappa_exp_kHz, tweezer_wavelength
     INCLUDE 'CSCAVITY.h'
 
-    double precision::theta_tweezer
-    double precision::linewidth_k, tweezer_input_power, beam_waist_X, beam_waist_Y
+    double precision::linewidth_k, theta_tweezer_radians
     double precision::Rayleigh_range, bead_mass, polarisability
     double precision::E_tweezer, E_cavity, E_drive
     double precision::X0
     double precision::kappa, Gamma_M
-    double precision::omega_0_prefactor
-    double precision::omega_x_0, omega_y_0, omega_z_0
+    double precision::omega_tweezer_prefactor
+    double precision::omega_x_tweezer, omega_y_tweezer, omega_z_tweezer
     integer::bead_debug, stdout
 
     double precision::pi, pi2
     double precision::bead_radius
-    double precision::omega_optical, coeff, cavity_volume, amplitude
+    double precision::omega_cavity, coeff, cavity_volume, amplitude
     double precision::kappa_in, kappa_bead
 
     ! zero eq. initial values
@@ -1157,23 +1212,23 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     bead_mass = bead_density * 4.*pi/3. * bead_radius**3
     polarisability = 4.* pi * vacuum_permittivity * (bead_permittivity - 1.) / (bead_permittivity + 2.) * bead_radius**3
 
-    omega_optical = speed_of_light * linewidth_k
+    omega_cavity = speed_of_light * linewidth_k
     ! add a factor of 4 here. Not in GALAX1-5 routines!!!
     cavity_volume = cavity_length * pi * cavity_waist**2 / 4.d0
 
     ! Depth of cavity field. Weak and unimportant for CS case
-    amplitude = omega_optical * polarisability / 2. / cavity_volume / vacuum_permittivity
+    amplitude = omega_cavity * polarisability / 2. / cavity_volume / vacuum_permittivity
 
     E_tweezer = sqrt(4. * tweezer_input_power / (beam_waist_X * beam_waist_Y * pi * speed_of_light * vacuum_permittivity))
-    E_cavity = sqrt(hbar * omega_optical / (2. * cavity_volume * vacuum_permittivity))
+    E_cavity = sqrt(hbar * omega_cavity / (2. * cavity_volume * vacuum_permittivity))
     ! use negative E_drive, in units of hbar
     ! electric field of the combined cavity and tweezer light
-    E_drive = -0.5d0 * polarisability * E_tweezer * E_cavity * sin(theta_tweezer)
+    E_drive = -0.5d0 * polarisability * E_tweezer * E_cavity * sin(theta_tweezer_radians)
 
     kappa_in = pi * speed_of_light / Finesse / cavity_length
-    coeff = linewidth_k * polarisability / vacuum_permittivity / omega_optical**2
+    coeff = linewidth_k * polarisability / vacuum_permittivity / omega_cavity**2
 
-    ! this is the only part that depends on X0 and is not in the X0 loop, but it is extremely neglible at ~10^-86
+    ! NOTE: this is the only part that depends on X0 and is not in the X0 loop, but it is extremely neglible at ~10^-86
     kappa_bead = 4. * coeff**2 * Free_Spectral_Range * cos(linewidth_k * X0)**2
     kappa = kappa_in + kappa_bead
 
@@ -1182,12 +1237,13 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     ! 1 bar = 10^5 pascal; air_pressure /mbar = 10^2 Pascal
     Gamma_M = (16. / pi) * ((air_pressure * 1.d2) / (bead_radius * bead_density * air_speed))
 
-    omega_0_prefactor = polarisability * E_tweezer**2 / bead_mass
-    omega_x_0 = sqrt(omega_0_prefactor / beam_waist_X**2)
-    omega_y_0 = sqrt(omega_0_prefactor / beam_waist_Y**2)
-    omega_z_0 = sqrt(omega_0_prefactor / (2.d0 * Rayleigh_range**2))
+    omega_tweezer_prefactor = polarisability * E_tweezer**2 / bead_mass
+    omega_x_tweezer = sqrt(omega_tweezer_prefactor / beam_waist_X**2)
+    omega_y_tweezer = sqrt(omega_tweezer_prefactor / beam_waist_Y**2)
+    omega_z_tweezer = sqrt(omega_tweezer_prefactor / (2.d0 * Rayleigh_range**2))
 
     IF (bead_debug == 1) THEN
+        WRITE(stdout, *)
         WRITE(stdout, *) '---------------------------------------------'
         WRITE(stdout, *) 'BEAD PARAMETERS'
         WRITE(stdout, *) '---------------------------------------------'
@@ -1198,14 +1254,21 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
         WRITE(stdout, *) 'Cavity trap, amplitude/2π (zeroth shift) - both at node /Hz = '
         WRITE(stdout, *) amplitude / pi2,  amplitude * cos(linewidth_k * X0)**2
         WRITE(stdout, *)
-        WRITE(stdout, *) 'E_tweezer /Volts.m^-1 = ', E_tweezer
-        WRITE(stdout, *) 'E_cavity /Volts.m^-1 = ', E_cavity
+        WRITE(stdout, *) 'E_tweezer /Vm^-1 = ', E_tweezer
+        WRITE(stdout, *) 'E_cavity /Vm^-1 = ', E_cavity
+        WRITE(stdout, *) 'E_drive /Vm^-1 = ', E_drive
+        WRITE(stdout, *) 'E_drive /hbar = ', E_drive / hbar
         WRITE(stdout, *)
         WRITE(stdout, *) 'kappa_in /kHz = ', kappa_in / pi2 * 1.d-3
         WRITE(stdout, *) 'kappa_bead (at node) /kHz = ', kappa_bead / pi2 * 1.d-3
         WRITE(stdout, *) 'Calculated optical damping: kappa_calc /kHz = ', kappa / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
+        WRITE(stdout, *)
+        WRITE(stdout, *) 'MECHANICAL FREQUENCIES IN THE TWEEZER FRAME'
+        WRITE(stdout, *) 'omega_x_tweezer /kHz = ', omega_x_tweezer / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_y_tweezer /kHz = ', omega_y_tweezer / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_z_tweezer /kHz = ', omega_z_tweezer / pi2 * 1.d-3
     END IF
 
     RETURN
@@ -1214,12 +1277,12 @@ END
 
 SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     X0_value, &
-    theta_tweezer, linewidth_k, &
+    linewidth_k, theta_tweezer_radians, &
     G_matrix, &
     Rayleigh_range, bead_mass, &
     E_drive, &
     detuning, kappa, Gamma_M, &
-    omega_x_0, omega_y_0, omega_z_0, &
+    omega_x_tweezer, omega_y_tweezer, omega_z_tweezer, &
     omega_x_CS, omega_y_CS, omega_z_CS, &
     omega_x_OPT, omega_y_OPT, omega_z_OPT, &
     omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT, &
@@ -1235,17 +1298,18 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     double precision::hbar, speed_of_light, kB, vacuum_permittivity
     double precision::Free_Spectral_Range, bath_temperature, air_pressure, air_speed
     double precision::bead_diameter, bead_density, bead_permittivity
+    double precision::tweezer_input_power, beam_waist_X, beam_waist_Y, theta_tweezer_over_pi
     double precision::cavity_waist, cavity_length, Finesse
     double precision::half_kappa_exp_kHz, tweezer_wavelength
     INCLUDE 'CSCAVITY.h'
 
     double precision::X0_value
-    double precision::theta_tweezer, linewidth_k
+    double precision::linewidth_k, theta_tweezer_radians
     double precision::G_matrix(6)
     double precision::Rayleigh_range, bead_mass
     double precision::E_drive
     double precision::detuning, kappa, Gamma_M
-    double precision::omega_x_0, omega_y_0, omega_z_0
+    double precision::omega_x_tweezer, omega_y_tweezer, omega_z_tweezer
     double precision::omega_x_CS, omega_y_CS, omega_z_CS
     double precision::omega_x_OPT, omega_y_OPT, omega_z_OPT
     double precision::omega_x_CS_plus_OPT, omega_y_CS_plus_OPT, omega_z_CS_plus_OPT
@@ -1256,8 +1320,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     double precision::pi, pi2
     double precision::kX0, half_kappa
-    double precision::photon_field_prefactor, photon_field_real, photon_field_imag
-    double precision::N_photon
+    double precision::mean_cavity_field_prefactor, mean_cavity_field_real, mean_cavity_field_imag
     double precision::omega_CS_prefactor, dx_CS, dy_CS, dz_CS
     double precision::X_zpf, Y_zpf, Z_zpf
     double precision::k_X_zpf, k_Y_zpf, k_Z_zpf
@@ -1274,22 +1337,19 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     half_kappa = 0.5d0 * kappa
 
     kX0 = linewidth_k * X0_value
-    ! photon number in cavity
-    ! real part of photon field
-    photon_field_prefactor = (E_drive / hbar) * cos(kX0) / (half_kappa**2 + detuning**2)
-    photon_field_real = photon_field_prefactor * detuning
-    photon_field_imag = -photon_field_prefactor * half_kappa
-
-    N_photon = ((E_drive / hbar) * cos(kX0))**2 / (half_kappa**2 + detuning**2)
+    ! the mean cavity field a.k.a. alpha_bar
+    mean_cavity_field_prefactor = (E_drive / hbar) * cos(kX0) / (half_kappa**2 + detuning**2)
+    mean_cavity_field_real = mean_cavity_field_prefactor * detuning
+    mean_cavity_field_imag = mean_cavity_field_prefactor * (-half_kappa)
 
     ! Coherent scattering correction to frequency squared
-    omega_CS_prefactor = -2. * E_drive / bead_mass * photon_field_real * cos(kX0)
-    dx_CS = omega_CS_prefactor * (linewidth_k * sin(theta_tweezer))**2
-    dy_CS = omega_CS_prefactor * (linewidth_k * cos(theta_tweezer))**2
+    omega_CS_prefactor = -2. * E_drive / bead_mass * mean_cavity_field_real * cos(kX0)
+    dx_CS = omega_CS_prefactor * (linewidth_k * sin(theta_tweezer_radians))**2
+    dy_CS = omega_CS_prefactor * (linewidth_k * cos(theta_tweezer_radians))**2
     dz_CS = omega_CS_prefactor * (linewidth_k - 1.d0 / Rayleigh_range)**2
-    omega_x_CS = sqrt(omega_x_0**2 + dx_CS)
-    omega_y_CS = sqrt(omega_y_0**2 + dy_CS)
-    omega_z_CS = sqrt(omega_z_0**2 + dz_CS)
+    omega_x_CS = sqrt(omega_x_tweezer**2 + dx_CS)
+    omega_y_CS = sqrt(omega_y_tweezer**2 + dy_CS)
+    omega_z_CS = sqrt(omega_z_tweezer**2 + dz_CS)
 
     ! zero point fluctuations
     X_zpf = sqrt(hbar / (2.d0 * bead_mass * omega_x_CS))
@@ -1302,13 +1362,13 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     k_Z_zpf = (linewidth_k - 1.d0 / Rayleigh_range) * Z_zpf
 
     ! optomechanical couplings
-    g_xY = (E_drive / hbar) * k_X_zpf * sin(kX0) * sin(theta_tweezer)
-    g_yY = (E_drive / hbar) * k_Y_zpf * sin(kX0) * cos(theta_tweezer)
+    g_xY = (E_drive / hbar) * k_X_zpf * sin(kX0) * sin(theta_tweezer_radians)
+    g_yY = (E_drive / hbar) * k_Y_zpf * sin(kX0) * cos(theta_tweezer_radians)
     g_zP = -(E_drive / hbar) * k_Z_zpf * cos(kX0)
 
-    gxy = (E_drive / hbar) * k_X_zpf * k_Y_zpf * photon_field_real * cos(kX0) * sin(2. * theta_tweezer)
-    gyz = 2.d0 * (E_drive / hbar) * k_Y_zpf * k_Z_zpf * photon_field_imag * sin(kX0) * cos(theta_tweezer)
-    gzx = 2.d0 * (E_drive / hbar) * k_Z_zpf * k_X_zpf * photon_field_imag * sin(kX0) * sin(theta_tweezer)
+    gxy = (E_drive / hbar) * k_X_zpf * k_Y_zpf * mean_cavity_field_real * cos(kX0) * sin(2. * theta_tweezer_radians)
+    gyz = 2.d0 * (E_drive / hbar) * k_Y_zpf * k_Z_zpf * mean_cavity_field_imag * sin(kX0) * cos(theta_tweezer_radians)
+    gzx = 2.d0 * (E_drive / hbar) * k_Z_zpf * k_X_zpf * mean_cavity_field_imag * sin(kX0) * sin(theta_tweezer_radians)
 
     ! assign these couplings to an array
     G_matrix(1) = g_xY
@@ -1323,29 +1383,20 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) '---------------------------------------------'
         WRITE(stdout, *) 'EQUILIBRIUM PARAMETERS'
         WRITE(stdout, *) '---------------------------------------------'
-        WRITE(stdout, *) '(E_drive / hbar) = ', (E_drive / hbar)
+        WRITE(stdout, *) 'OPTOMECHANICAL COUPLINGS'
+        WRITE(stdout, *) 'g_xY /kHz', g_xY / pi2 * 1.d-3
+        WRITE(stdout, *) 'g_yY /kHz', g_yY / pi2 * 1.d-3
+        WRITE(stdout, *) 'g_zP /kHz', g_zP / pi2 * 1.d-3
         WRITE(stdout, *)
-        WRITE(stdout, *) 'detuning /kHz = ', detuning / pi2 * 1.d-3
-        WRITE(stdout, *) 'half_kappa /kHz = ', half_kappa / pi2 * 1.d-3
-        WRITE(stdout, *) 'Number of photons in cavity = ', N_photon
-        WRITE(stdout, *)
-        WRITE(stdout, *) 'MECHANICAL FREQUENCIES IN THE TWEEZER FRAME'
-        WRITE(stdout, *) 'omega_x_0 /kHz = ', omega_x_0 / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_y_0 /kHz = ', omega_y_0 / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_z_0 /kHz = ', omega_z_0 / pi2 * 1.d-3
+        WRITE(stdout, *) 'MECHANICAL COUPLINGS'
+        WRITE(stdout, *) 'gxy /kHz', gxy / pi2 * 1.d-3
+        WRITE(stdout, *) 'gyz /kHz', gyz / pi2 * 1.d-3
+        WRITE(stdout, *) 'gzx /kHz', gzx / pi2 * 1.d-3
         WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING CORRECTED'
         WRITE(stdout, *) 'omega_x_CS /kHz = ', omega_x_CS / pi2 * 1.d-3
         WRITE(stdout, *) 'omega_y_CS /kHz = ', omega_y_CS / pi2 * 1.d-3
         WRITE(stdout, *) 'omega_z_CS /kHz = ', omega_z_CS / pi2 * 1.d-3
-        WRITE(stdout, *)
-        WRITE(stdout, *) 'g_xY /kHz', g_xY / pi2 * 1.d-3
-        WRITE(stdout, *) 'g_yY /kHz', g_yY / pi2 * 1.d-3
-        WRITE(stdout, *) 'g_zP /kHz', g_zP / pi2 * 1.d-3
-        WRITE(stdout, *)
-        WRITE(stdout, *) 'gxy /kHz', gxy / pi2 * 1.d-3
-        WRITE(stdout, *) 'gyz /kHz', gyz / pi2 * 1.d-3
-        WRITE(stdout, *) 'gzx /kHz', gzx / pi2 * 1.d-3
     END IF
 
     ! Add optical spring correction to the frequency squared
@@ -1365,13 +1416,14 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     suscept_z = (sum_z / (sum_z**2 + half_kappa**2)) - (diff_z / (diff_z**2 + half_kappa**2))
     dz_OPT = 2. * omega_z_CS * g_zP**2 * suscept_z
 
-    omega_x_OPT = sqrt(omega_x_0**2 + dx_OPT)
-    omega_y_OPT = sqrt(omega_y_0**2 + dy_OPT)
-    omega_z_OPT = sqrt(omega_z_0**2 + dz_OPT)
+    omega_x_OPT = sqrt(omega_x_tweezer**2 + dx_OPT)
+    omega_y_OPT = sqrt(omega_y_tweezer**2 + dy_OPT)
+    ! NOTE: for 091-detuning and low X0 ~ < 0.06 lambda, dz_OPT > omega_z_tweezer**2 so this evaulates to NaN
+    omega_z_OPT = sqrt(omega_z_tweezer**2 + dz_OPT)
 
-    omega_x_CS_plus_OPT = sqrt(omega_x_0**2 + dx_CS + dx_OPT)
-    omega_y_CS_plus_OPT = sqrt(omega_y_0**2 + dy_CS + dy_OPT)
-    omega_z_CS_plus_OPT = sqrt(omega_z_0**2 + dz_CS + dz_OPT)
+    omega_x_CS_plus_OPT = sqrt(omega_x_tweezer**2 + dx_CS + dx_OPT)
+    omega_y_CS_plus_OPT = sqrt(omega_y_tweezer**2 + dy_CS + dy_OPT)
+    omega_z_CS_plus_OPT = sqrt(omega_z_tweezer**2 + dz_CS + dz_OPT)
 
     IF (equilibrium_debug == 1) THEN
         WRITE(stdout, *)
@@ -1380,11 +1432,13 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) 'omega_y_OPT /kHz = ', omega_y_OPT / pi2 * 1.d-3
         WRITE(stdout, *) 'omega_z_OPT /kHz = ', omega_z_OPT / pi2 * 1.d-3
         WRITE(stdout, *)
+        WRITE(stdout, *) 'dz_OPT', dz_OPT
+        WRITE(stdout, *) 'omega_z_tweezer**2 + dz_OPT', omega_z_tweezer**2 + dz_OPT
+        WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING + OPTICAL SPRING CORRECTED'
         WRITE(stdout, *) 'omega_x_CS_plus_OPT /kHz = ', omega_x_CS_plus_OPT / pi2 * 1.d-3
         WRITE(stdout, *) 'omega_y_CS_plus_OPT /kHz = ', omega_y_CS_plus_OPT / pi2 * 1.d-3
         WRITE(stdout, *) 'omega_z_CS_plus_OPT /kHz = ', omega_z_CS_plus_OPT / pi2 * 1.d-3
-
     END IF
 
     CALL CALCULATE_COOLING_RATES(&

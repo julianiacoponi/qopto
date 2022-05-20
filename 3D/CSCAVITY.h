@@ -6,7 +6,6 @@
 !   bead_radius=71.5d-9, &
 !   bead_density=2198.d0, &
 !   epsilon_R=1.45d0**2, &
-!   epsilon_0=8.854d-12, &
 
 ! input parameters for UCL- Antonio cavity
  PARAMETER(&
@@ -23,13 +22,18 @@
     air_pressure=3.d-3, & ! /millibars
     air_speed=500.d0, & ! /ms^-1
 
-    bead_diameter=120.d-9, & ! /metres
+    bead_diameter=120.2d-9, & ! /metres
     bead_density=1850.d0, & ! /kgm^-3
     bead_permittivity=1.98d0, & ! /dimensionless
+
+    tweezer_input_power=0.485d0, & ! /Watts
+    beam_waist_X=1.0679d-6, & ! /metres
+    beam_waist_Y=0.9276d-6, & ! /metres
+    theta_tweezer_over_pi=0.233d0, & ! angle between tweezer polarisation and cavity axis /π
 
     cavity_waist=61.d-6, & ! /metres
     cavity_length=1.223d-2, & ! /metres
     Finesse=3.d4, & ! ~number of times photons reflect off cavity mirrors before absorption /dimensionless
 
-    half_kappa_exp_kHz = 197.3, & ! cavity linewidth ±0.6kHz (most accurately measured part of the experiment) /kHz
-    tweezer_wavelength = 1.064d-6) ! /metres
+    half_kappa_exp_kHz=197.3, & ! cavity linewidth ±0.6kHz (most accurately measured part of the experiment) /kHz
+    tweezer_wavelength=1.064d-6) ! /metres
