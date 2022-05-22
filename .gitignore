@@ -1,4 +1,15 @@
 .DS_Store
 
 # Fortran executables/binaries
-.out
+*.out
+
+# Fortran output filetype (for some reason)
+*.dat
+
+# spreadsheets
+*.csv
+*.xlsx
+
+# iPython notebooks
+*.ipynb
+.ipynb-checkpoints/
