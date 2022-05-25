@@ -28,7 +28,7 @@ double precision, DIMENSION(num_omega_samples)::&
     S_homodyne_array, S_heterodyne_array
 
 integer::ii, jj, nn, use_experimental_positions
-double precision::pi, pi2
+double precision::pi, pi2, kHz
 double precision::X0_value, lambda_coeff, node, half_node, X0_to_record_spectra_at
 double precision::linewidth_k
 double precision::theta_homodyne_0
@@ -57,8 +57,8 @@ double precision::area_under_spectrum
 double precision::phonons_from_cooling_formula_array(3), phonons_array(3), x_y_phonons
 double precision::X0_experimental_positions(11)
 
+character(len=49)::detuning_dir
 character(len=23)::experimental_positions_dir
-character(len=21)::detuning_dir
 character(len=2)::ss
 
 ! integer labels for WRITE for the .dat output files
@@ -142,7 +142,7 @@ END IF
 ! https://meteor.geol.iastate.edu/classes/mt227/lectures/Formatting.pdf
 
 ! e.g. the below is:
-! '8' = up to 8 things written to the same line
+! '10' = up to 8 things written to the same line
 ! 'ES' = scientific exponential notation (1-9E+power, instead of 0.1-0.9)
 ! '23' = number of positions to be used
 ! '15' = number of digits to the right of the decimal point
@@ -156,6 +156,7 @@ X0_to_record_spectra_at = half_node
 
 pi = dacos(-1.d0)
 pi2 = 2.d0 * pi
+kHz = pi2 * 1.d3
 
 kappa_exp = pi2 * 2.d0 * half_kappa_exp_kHz * 1.d3 ! /rads^-1
 linewidth_k = pi2 / tweezer_wavelength ! m^-1
@@ -190,7 +191,7 @@ CALL CALCULATE_BEAD_PARAMETERS(&
 
 ! detuning of trap beam i.e. laser frequency minus cavity frequency a.k.a. Delta /kHz
 IF (detuning_choice == 1) THEN
-    detuning_dir = '091-detuning-output/'
+    detuning_dir = '/Users/julian/Code/qopto/3D/091-detuning-output/'
     detuning_kHz = -0.91 * half_kappa_exp_kHz
     ! taken from position_0.91.csv
     X0_experimental_positions(1) = 0.244100760452371d0
@@ -206,7 +207,7 @@ IF (detuning_choice == 1) THEN
     X0_experimental_positions(11) = 0.0065752690208695d0
 
 ELSE IF (detuning_choice == 2) THEN
-    detuning_dir = '1825-detuning-output/'
+    detuning_dir = '/Users/julian/Code/qopto/3D/1825-detuning-output/'
     detuning_kHz = -1.825 * half_kappa_exp_kHz
     ! taken from position_1.825.csv
     X0_experimental_positions(1) = 0.25d0
@@ -257,10 +258,10 @@ WRITE(cavity_parameters, *) "beam_waist_X", beam_waist_X
 WRITE(cavity_parameters, *) "beam_waist_Y", beam_waist_Y
 WRITE(cavity_parameters, *) "theta_tweezer_radians", theta_tweezer_radians
 
-WRITE(cavity_parameters, *) "half_kappa_calc_kHz", 0.5d0 * kappa_calc / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_x_0", omega_x_0 / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_y_0", omega_y_0 / pi2 * 1.d-3
-WRITE(cavity_parameters, *) "omega_z_0", omega_z_0 / pi2 * 1.d-3
+WRITE(cavity_parameters, *) "half_kappa_calc_kHz", 0.5d0 * kappa_calc / kHz
+WRITE(cavity_parameters, *) "omega_x_0", omega_x_0 / kHz
+WRITE(cavity_parameters, *) "omega_y_0", omega_y_0 / kHz
+WRITE(cavity_parameters, *) "omega_z_0", omega_z_0 / kHz
 
 ! NOTE: code relies on using experimental positions 2nd (otherwise num_X0_samples gets overwritten)
 DO use_experimental_positions=0, 1
@@ -270,14 +271,14 @@ DO use_experimental_positions=0, 1
         DO ii=1, 11
             WRITE(ss, '(I0)') ii ! converts integer to string
             OPEN(&
-            ii * 10, & ! numbered 10, 20, 30, ..., 110
-            file= &
-                trim(detuning_dir)// &
-                experimental_positions_dir// &
-                'QLT_spectra_at_position_'// &
-                trim(ss)// &
-                '.dat', &
-            status='unknown')
+                ii * 10, & ! numbered 10, 20, 30, ..., 110
+                file=&
+                    trim(detuning_dir)// &
+                    trim(experimental_positions_dir)// &
+                    'QLT_spectra_at_position_'// &
+                    trim(ss)// &
+                    '.dat', &
+                status='unknown')
             WRITE(ii * 10, *) &
                 'kHz ', &
                 ' S_XX S_YY S_ZZ', &
@@ -313,7 +314,6 @@ DO use_experimental_positions=0, 1
 
     OPEN(OM_couplings, file=trim(detuning_dir)//trim(experimental_positions_dir)//'OM_couplings.dat', status='unknown')
     OPEN(mech_couplings, file=trim(detuning_dir)//trim(experimental_positions_dir)//'mech_couplings.dat', status='unknown')
-
 
     WRITE(omega_QLT, *) 'X0/lambda omega_x_QLT omega_y_QLT omega_z_QLT'
     WRITE(omega_CS, *) 'X0/lambda omega_x_CS omega_y_CS omega_z_CS'
@@ -434,7 +434,7 @@ DO use_experimental_positions=0, 1
 
             ! update
             S_homodyne_negative = 0.5d0 * (S_homodyne_negative + S_homodyne_value)
-            omega_kHz = omega_value / pi2 * 1.d-3
+            omega_kHz = omega_value / kHz
 
             IF (use_experimental_positions == 1) THEN
                 ! spectra_position files are labelled 10,20,30,...,110
@@ -482,64 +482,64 @@ DO use_experimental_positions=0, 1
 
         WRITE(omega_CS, 1015) &
             lambda_coeff, &
-            omega_x_CS / pi2 * 1.d-3, &
-            omega_y_CS / pi2 * 1.d-3, &
-            omega_z_CS / pi2 * 1.d-3
+            omega_x_CS / kHz, &
+            omega_y_CS / kHz, &
+            omega_z_CS / kHz
 
         WRITE(omega_OS, 1015) &
             lambda_coeff, &
-            omega_x_OS / pi2 * 1.d-3, &
-            omega_y_OS / pi2 * 1.d-3, &
-            omega_z_OS / pi2 * 1.d-3
+            omega_x_OS / kHz, &
+            omega_y_OS / kHz, &
+            omega_z_OS / kHz
 
         WRITE(omega_CS_plus_OS, 1015) &
             lambda_coeff, &
-            omega_x_CS_plus_OS / pi2 * 1.d-3, &
-            omega_y_CS_plus_OS / pi2 * 1.d-3, &
-            omega_z_CS_plus_OS / pi2 * 1.d-3
+            omega_x_CS_plus_OS / kHz, &
+            omega_y_CS_plus_OS / kHz, &
+            omega_z_CS_plus_OS / kHz
 
         WRITE(omega_QLT, 1015) &
             lambda_coeff, &
-            omega_array(maxloc(S_XX_array)) / pi2 * 1.d-3, &
-            omega_array(maxloc(S_YY_array)) / pi2 * 1.d-3, &
-            omega_array(maxloc(S_ZZ_array)) / pi2 * 1.d-3
+            omega_array(maxloc(S_XX_array)) / kHz, &
+            omega_array(maxloc(S_YY_array)) / kHz, &
+            omega_array(maxloc(S_ZZ_array)) / kHz
 
         WRITE(deviation_0, 1015) &
             lambda_coeff, &
-            (omega_array(maxloc(S_XX_array)) - omega_x_0) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_YY_array)) - omega_y_0) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_ZZ_array)) - omega_z_0) / pi2 * 1.d-3
+            (omega_array(maxloc(S_XX_array)) - omega_x_0) / kHz , &
+            (omega_array(maxloc(S_YY_array)) - omega_y_0) / kHz , &
+            (omega_array(maxloc(S_ZZ_array)) - omega_z_0) / kHz
 
         WRITE(deviation_CS, 1015) &
             lambda_coeff, &
-            (omega_array(maxloc(S_XX_array)) - omega_x_CS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_YY_array)) - omega_y_CS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_ZZ_array)) - omega_z_CS) / pi2 * 1.d-3
+            (omega_array(maxloc(S_XX_array)) - omega_x_CS) / kHz , &
+            (omega_array(maxloc(S_YY_array)) - omega_y_CS) / kHz , &
+            (omega_array(maxloc(S_ZZ_array)) - omega_z_CS) / kHz
 
         WRITE(deviation_OS, 1015) &
             lambda_coeff, &
-            (omega_array(maxloc(S_XX_array)) - omega_x_OS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_YY_array)) - omega_y_OS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_ZZ_array)) - omega_z_OS) / pi2 * 1.d-3
+            (omega_array(maxloc(S_XX_array)) - omega_x_OS) / kHz , &
+            (omega_array(maxloc(S_YY_array)) - omega_y_OS) / kHz , &
+            (omega_array(maxloc(S_ZZ_array)) - omega_z_OS) / kHz
 
         ! NOTE: this should be ~zero, as the PSD peaks should simulate the dynamical effect of the optical spring
         WRITE(deviation_CS_plus_OS, 1015) &
             lambda_coeff, &
-            (omega_array(maxloc(S_XX_array)) - omega_x_CS_plus_OS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_YY_array)) - omega_y_CS_plus_OS) / pi2 * 1.d-3 , &
-            (omega_array(maxloc(S_ZZ_array)) - omega_z_CS_plus_OS) / pi2 * 1.d-3
+            (omega_array(maxloc(S_XX_array)) - omega_x_CS_plus_OS) / kHz , &
+            (omega_array(maxloc(S_YY_array)) - omega_y_CS_plus_OS) / kHz , &
+            (omega_array(maxloc(S_ZZ_array)) - omega_z_CS_plus_OS) / kHz
 
         WRITE(OM_couplings, 1015) &
             lambda_coeff, &
-            G_matrix(1) / pi2 * 1.d-3, &
-            G_matrix(2) / pi2 * 1.d-3, &
-            G_matrix(3) / pi2 * 1.d-3
+            G_matrix(1) / kHz, &
+            G_matrix(2) / kHz, &
+            G_matrix(3) / kHz
 
         WRITE(mech_couplings, 1015) &
             lambda_coeff, &
-            G_matrix(4) / pi2 * 1.d-3, &
-            G_matrix(5) / pi2 * 1.d-3, &
-            G_matrix(6) / pi2 * 1.d-3
+            G_matrix(4) / kHz, &
+            G_matrix(5) / kHz, &
+            G_matrix(6) / kHz
 
         IF (extra_debug == 1) THEN
             num_phonons = (omega_x_CS + detuning)**2 + (0.5d0 * kappa_exp)**2
@@ -1202,7 +1202,7 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     bead_debug, stdout)
     ! """
     ! subroutine below is provided by user
-    ! and calculates  relevant parameters
+    ! and calculates relevant parameters
     ! """
     IMPLICIT NONE
 
@@ -1224,7 +1224,7 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     double precision::omega_x_0, omega_y_0, omega_z_0
     integer::bead_debug, stdout
 
-    double precision::pi, pi2
+    double precision::pi, pi2, kHz
     double precision::bead_radius
     double precision::omega_cavity, coeff, cavity_volume, amplitude
     double precision::kappa_in, kappa_bead
@@ -1232,6 +1232,7 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
     ! zero eq. initial values
     pi = dacos(-1.d0)
     pi2 = 2.d0 * pi
+    kHz = pi2 * 1.d3
     bead_radius = 0.5d0 * bead_diameter
 
     Rayleigh_range = 0.5d0 * linewidth_k * beam_waist_X * beam_waist_Y
@@ -1285,16 +1286,16 @@ SUBROUTINE CALCULATE_BEAD_PARAMETERS(&
         WRITE(stdout, *) 'E_drive /Vm^-1 = ', E_drive
         WRITE(stdout, *) 'E_drive /hbar = ', E_drive / hbar
         WRITE(stdout, *)
-        WRITE(stdout, *) 'kappa_in /kHz = ', kappa_in / pi2 * 1.d-3
-        WRITE(stdout, *) 'kappa_bead (at node) /kHz = ', kappa_bead / pi2 * 1.d-3
-        WRITE(stdout, *) 'Calculated optical damping: kappa_calc /kHz = ', kappa / pi2 * 1.d-3
+        WRITE(stdout, *) 'kappa_in /kHz = ', kappa_in / kHz
+        WRITE(stdout, *) 'kappa_bead (at node) /kHz = ', kappa_bead / kHz
+        WRITE(stdout, *) 'Calculated optical damping: kappa_calc /kHz = ', kappa / kHz
         WRITE(stdout, *)
         WRITE(stdout, *) 'Mechanical damping: Gamma_M /Hz = ', Gamma_M
         WRITE(stdout, *)
         WRITE(stdout, *) 'MECHANICAL FREQUENCIES IN THE TWEEZER FRAME'
-        WRITE(stdout, *) 'omega_x_0 /kHz = ', omega_x_0 / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_y_0 /kHz = ', omega_y_0 / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_z_0 /kHz = ', omega_z_0 / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_x_0 /kHz = ', omega_x_0 / kHz
+        WRITE(stdout, *) 'omega_y_0 /kHz = ', omega_y_0 / kHz
+        WRITE(stdout, *) 'omega_z_0 /kHz = ', omega_z_0 / kHz
     END IF
 
     RETURN
@@ -1344,7 +1345,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     double precision::phonons_from_cooling_formula_array(3)
     integer::equilibrium_debug, cooling_debug, stdout
 
-    double precision::pi, pi2
+    double precision::pi, pi2, kHz
     double precision::kX0, half_kappa
     double precision::mean_cavity_field_prefactor, mean_cavity_field_real, mean_cavity_field_imag
     double precision::omega_CS_prefactor, dx_CS, dy_CS, dz_CS
@@ -1360,6 +1361,7 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
 
     pi = dacos(-1.d0)
     pi2 = 2.d0 * pi
+    kHz = pi2 * 1.d3
     half_kappa = 0.5d0 * kappa
 
     kX0 = linewidth_k * X0_value
@@ -1410,19 +1412,19 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
         WRITE(stdout, *) 'EQUILIBRIUM PARAMETERS'
         WRITE(stdout, *) '---------------------------------------------'
         WRITE(stdout, *) 'OPTOMECHANICAL COUPLINGS'
-        WRITE(stdout, *) 'g_xY /kHz', g_xY / pi2 * 1.d-3
-        WRITE(stdout, *) 'g_yY /kHz', g_yY / pi2 * 1.d-3
-        WRITE(stdout, *) 'g_zP /kHz', g_zP / pi2 * 1.d-3
+        WRITE(stdout, *) 'g_xY /kHz', g_xY / kHz
+        WRITE(stdout, *) 'g_yY /kHz', g_yY / kHz
+        WRITE(stdout, *) 'g_zP /kHz', g_zP / kHz
         WRITE(stdout, *)
         WRITE(stdout, *) 'MECHANICAL COUPLINGS'
-        WRITE(stdout, *) 'gxy /kHz', gxy / pi2 * 1.d-3
-        WRITE(stdout, *) 'gyz /kHz', gyz / pi2 * 1.d-3
-        WRITE(stdout, *) 'gzx /kHz', gzx / pi2 * 1.d-3
+        WRITE(stdout, *) 'gxy /kHz', gxy / kHz
+        WRITE(stdout, *) 'gyz /kHz', gyz / kHz
+        WRITE(stdout, *) 'gzx /kHz', gzx / kHz
         WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING CORRECTED'
-        WRITE(stdout, *) 'omega_x_CS /kHz = ', omega_x_CS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_y_CS /kHz = ', omega_y_CS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_z_CS /kHz = ', omega_z_CS / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_x_CS /kHz = ', omega_x_CS / kHz
+        WRITE(stdout, *) 'omega_y_CS /kHz = ', omega_y_CS / kHz
+        WRITE(stdout, *) 'omega_z_CS /kHz = ', omega_z_CS / kHz
     END IF
 
     ! Add optical spring correction to the frequency squared
@@ -1453,14 +1455,14 @@ SUBROUTINE CALCULATE_EQUILIBRIUM_PARAMETERS(&
     IF (equilibrium_debug == 1) THEN
         WRITE(stdout, *)
         WRITE(stdout, *) 'OPTICAL SPRING CORRECTED'
-        WRITE(stdout, *) 'omega_x_OS /kHz = ', omega_x_OS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_y_OS /kHz = ', omega_y_OS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_z_OS /kHz = ', omega_z_OS / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_x_OS /kHz = ', omega_x_OS / kHz
+        WRITE(stdout, *) 'omega_y_OS /kHz = ', omega_y_OS / kHz
+        WRITE(stdout, *) 'omega_z_OS /kHz = ', omega_z_OS / kHz
         WRITE(stdout, *)
         WRITE(stdout, *) 'COHERENT SCATTERING + OPTICAL SPRING CORRECTED'
-        WRITE(stdout, *) 'omega_x_CS_plus_OS /kHz = ', omega_x_CS_plus_OS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_y_CS_plus_OS /kHz = ', omega_y_CS_plus_OS / pi2 * 1.d-3
-        WRITE(stdout, *) 'omega_z_CS_plus_OS /kHz = ', omega_z_CS_plus_OS / pi2 * 1.d-3
+        WRITE(stdout, *) 'omega_x_CS_plus_OS /kHz = ', omega_x_CS_plus_OS / kHz
+        WRITE(stdout, *) 'omega_y_CS_plus_OS /kHz = ', omega_y_CS_plus_OS / kHz
+        WRITE(stdout, *) 'omega_z_CS_plus_OS /kHz = ', omega_z_CS_plus_OS / kHz
     END IF
 
     CALL CALCULATE_COOLING_RATES(&
