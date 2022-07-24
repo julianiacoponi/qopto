@@ -27,8 +27,8 @@
     bead_permittivity=1.98d0, & ! /dimensionless
 
     tweezer_input_power=0.485d0, & ! /Watts
-    beam_waist_X=1.0679d-6, & ! /metres
-    beam_waist_Y=0.9276d-6, & ! /metres
+    beam_waist_X=0.9276d-6, & ! /metres
+    beam_waist_Y=1.0679d-6, & ! /metres
     theta_tweezer_over_pi=0.233d0, & ! angle between tweezer polarisation and cavity axis /π
 
     cavity_waist=61.d-6, & ! /metres
